@@ -8,3 +8,4 @@ openai
 python-dotenv
 pydantic
 sse-starlette
+google-generativeai

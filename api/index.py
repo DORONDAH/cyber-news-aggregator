@@ -119,11 +119,13 @@ async def trigger_refresh():
 
 @app.get("/api/health")
 def health_check():
-    key = os.getenv("OPENAI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY")
     return {
         "status": "ok",
-        "openai_key_present": key is not None and len(key) > 0,
-        "openai_key_preview": f"{key[:5]}...{key[-4:]}" if key and len(key) > 10 else "N/A",
+        "openai_key_present": openai_key is not None and len(openai_key) > 0,
+        "gemini_key_present": gemini_key is not None and len(gemini_key) > 0,
+        "gemini_key_preview": f"{gemini_key[:5]}...{gemini_key[-4:]}" if gemini_key and len(gemini_key) > 10 else "N/A",
         "vercel_env": os.environ.get("VERCEL", "false")
     }
 

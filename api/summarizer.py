@@ -1,5 +1,5 @@
 import os
-from openai import OpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,35 +8,32 @@ async def summarize_article(content: str):
     if not content:
         return "No content available for summarization."
 
-    # Fetch key inside function to ensure we get the latest environment variable in serverless
-    key = os.getenv("OPENAI_API_KEY")
+    # Use GEMINI_API_KEY for free-tier reliability
+    key = os.getenv("GEMINI_API_KEY")
 
-    if not key or key == "your_openai_api_key_here":
-        print("DEBUG: OPENAI_API_KEY is missing or is the default placeholder.")
-        return "• This is a mock summary for testing purposes.\n• AI summarization requires a valid OpenAI API key in the Vercel settings.\n• Please ensure you have added the key and REDEPLOYED your app."
+    if not key or key == "your_gemini_api_key_here":
+        print("DEBUG: GEMINI_API_KEY is missing. Falling back to mock.")
+        return "• This is a mock summary.\n• Please add a GEMINI_API_KEY to your Vercel Environment Variables.\n• You can get one for free at aistudio.google.com."
 
     try:
-        print(f"DEBUG: Initializing OpenAI client with key starting with: {key[:8]}...")
-        local_client = OpenAI(api_key=key)
+        print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
+        genai.configure(api_key=key)
 
-        print(f"DEBUG: Calling OpenAI with content length: {len(content)}")
-        response = local_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a cybersecurity expert. Summarize the following news article into 3 key bullet points in non-technical language."},
-                {"role": "user", "content": content}
-            ],
-            max_tokens=150
-        )
-        print("DEBUG: OpenAI response received successfully.")
-        return response.choices[0].message.content
+        # Use gemini-1.5-flash for high speed and free tier compatibility
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        prompt = f"You are a cybersecurity expert. Summarize the following news article into 3 key bullet points in non-technical language:\n\n{content}"
+
+        print(f"DEBUG: Calling Gemini API...")
+        response = model.generate_content(prompt)
+
+        if response and response.text:
+            print("DEBUG: Gemini response received successfully.")
+            return response.text
+        else:
+            return "Summary not available. (Empty response from AI)"
+
     except Exception as e:
-        # Check if it's an OpenAI specific error
         error_message = str(e)
-        if "insufficient_quota" in error_message.lower():
-            print("CRITICAL: OpenAI Quota exceeded. Please check billing: https://platform.openai.com/settings/organization/billing")
-        elif "invalid_api_key" in error_message.lower():
-            print("CRITICAL: OpenAI API Key is invalid or expired.")
-
-        print(f"FULL OPENAI ERROR: {error_message}")
-        return f"Summary not available. (Error: {error_message})"
+        print(f"CRITICAL ERROR in Gemini summarization: {error_message}")
+        return f"Summary not available via Gemini. (Error: {error_message})"
