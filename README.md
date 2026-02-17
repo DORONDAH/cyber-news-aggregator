@@ -1,58 +1,16 @@
-# Cyber News Aggregator
+# React + Vite
 
-A lightweight, high-efficiency dashboard for cybersecurity news, summarized by AI.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
-- **Real-time Updates**: Uses Server-Sent Events (SSE) to push new summaries to the UI.
-- **AI Summarization**: Automatically generates 3 key bullet points for each article using OpenAI GPT-4o-mini (with fallback mock mode).
-- **Multi-source Scraper**: Aggregates news from BleepingComputer and TheHackerNews.
-- **Privacy & History**: Stores articles for 7 days with a "Clear History" option.
-- **Dark Mode Dashboard**: Modern, responsive UI built with React and Tailwind CSS.
+Currently, two official plugins are available:
 
-## Tech Stack
-- **Backend**: FastAPI, SQLAlchemy (SQLite), BeautifulSoup4, APScheduler, httpx.
-- **Frontend**: React (Vite), Tailwind CSS, Lucide React.
-- **AI**: OpenAI API (optional, mocks available).
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Getting Started
+## React Compiler
 
-### Backend Setup
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. (Optional) Set up your OpenAI API key in a `.env` file:
-   ```bash
-   echo "OPENAI_API_KEY=your_key_here" > .env
-   ```
-4. Run the server:
-   ```bash
-   python main.py
-   ```
-   The backend will be available at `http://localhost:8000`.
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-### Frontend Setup
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
-   The dashboard will be available at `http://localhost:5173`.
+## Expanding the ESLint configuration
 
-## Project Structure
-- `backend/main.py`: API routes, SSE, and background scheduler.
-- `backend/scraper.py`: Web scraping logic for news sources.
-- `backend/summarizer.py`: AI integration for generating article summaries.
-- `frontend/src/App.jsx`: Main dashboard logic and real-time connection.
-- `frontend/src/components/NewsCard.jsx`: UI component for displaying news items.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
