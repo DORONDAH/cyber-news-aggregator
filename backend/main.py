@@ -1,0 +1,152 @@
+from fastapi import FastAPI, Depends, BackgroundTasks, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+import asyncio
+import json
+from datetime import datetime, timedelta, timezone
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sse_starlette.sse import EventSourceResponse
+from contextlib import asynccontextmanager
+from typing import List
+
+from models import SessionLocal, Article, Base, engine
+from scraper import scrape_bleepingcomputer, scrape_thehackernews
+from summarizer import summarize_article
+
+# Simple SSE Publisher
+class Publisher:
+    def __init__(self):
+        self.subscribers: List[asyncio.Queue] = []
+
+    async def subscribe(self):
+        queue = asyncio.Queue()
+        self.subscribers.append(queue)
+        return queue
+
+    def unsubscribe(self, queue: asyncio.Queue):
+        if queue in self.subscribers:
+            self.subscribers.remove(queue)
+
+    async def publish(self, msg: str):
+        for queue in self.subscribers:
+            await queue.put(msg)
+
+publisher = Publisher()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+async def fetch_and_summarize():
+    db = SessionLocal()
+    try:
+        articles = await scrape_bleepingcomputer()
+        articles += await scrape_thehackernews()
+
+        for art_data in articles:
+            existing = db.query(Article).filter(Article.url == art_data['url']).first()
+            if not existing:
+                summary = await summarize_article(art_data['content'])
+                new_art = Article(
+                    title=art_data['title'],
+                    url=art_data['url'],
+                    content=art_data['content'],
+                    summary=summary,
+                    source=art_data['source'],
+                    published_at=art_data['published_at']
+                )
+                db.add(new_art)
+                db.commit()
+                db.refresh(new_art)
+
+                summary_json = {
+                    "id": new_art.id,
+                    "title": new_art.title,
+                    "url": new_art.url,
+                    "summary": new_art.summary,
+                    "source": new_art.source,
+                    "published_at": new_art.published_at.isoformat()
+                }
+                await publisher.publish(json.dumps(summary_json))
+
+    except Exception as e:
+        print(f"Error in fetch_and_summarize: {e}")
+    finally:
+        db.close()
+
+async def auto_delete_old_articles():
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        db.query(Article).filter(Article.created_at < cutoff).delete()
+        db.commit()
+    except Exception as e:
+        print(f"Error in auto_delete: {e}")
+    finally:
+        db.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(fetch_and_summarize, 'interval', minutes=30)
+    scheduler.add_job(auto_delete_old_articles, 'interval', hours=24)
+    scheduler.start()
+    # Trigger initial scrape in background
+    asyncio.create_task(fetch_and_summarize())
+    yield
+    # Shutdown
+    scheduler.shutdown()
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/api/news")
+def get_news(db: Session = Depends(get_db)):
+    # Get last 24 hours of news
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    return db.query(Article).filter(Article.created_at >= cutoff).order_by(Article.created_at.desc()).all()
+
+@app.get("/api/history")
+def get_history(db: Session = Depends(get_db)):
+    return db.query(Article).order_by(Article.created_at.desc()).limit(100).all()
+
+@app.post("/api/settings/clear")
+def clear_history(db: Session = Depends(get_db)):
+    db.query(Article).delete()
+    db.commit()
+    return {"status": "success"}
+
+@app.post("/api/refresh")
+async def trigger_refresh(background_tasks: BackgroundTasks):
+    background_tasks.add_task(fetch_and_summarize)
+    return {"status": "refresh triggered"}
+
+@app.get("/api/stream")
+async def message_stream(request: Request):
+    async def event_generator():
+        queue = await publisher.subscribe()
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                data = await queue.get()
+                yield {"data": data}
+        finally:
+            publisher.unsubscribe(queue)
+
+    return EventSourceResponse(event_generator())
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
