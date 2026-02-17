@@ -117,6 +117,16 @@ async def trigger_refresh():
     await fetch_and_summarize_logic()
     return {"status": "refresh completed"}
 
+@app.get("/api/health")
+def health_check():
+    key = os.getenv("OPENAI_API_KEY")
+    return {
+        "status": "ok",
+        "openai_key_present": key is not None and len(key) > 0,
+        "openai_key_preview": f"{key[:5]}...{key[-4:]}" if key and len(key) > 10 else "N/A",
+        "vercel_env": os.environ.get("VERCEL", "false")
+    }
+
 @app.get("/api/stream")
 async def message_stream(request: Request):
     async def event_generator():
