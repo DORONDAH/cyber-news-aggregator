@@ -4,14 +4,19 @@ from sqlalchemy.orm import Session
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sse_starlette.sse import EventSourceResponse
-from contextlib import asynccontextmanager
 from typing import List
+import os
 
-from models import SessionLocal, Article, Base, engine
-from scraper import scrape_bleepingcomputer, scrape_thehackernews
-from summarizer import summarize_article
+# Relative imports for Vercel
+try:
+    from .models import SessionLocal, Article, engine
+    from .scraper import scrape_bleepingcomputer, scrape_thehackernews
+    from .summarizer import summarize_article
+except ImportError:
+    from models import SessionLocal, Article, engine
+    from scraper import scrape_bleepingcomputer, scrape_thehackernews
+    from summarizer import summarize_article
 
 # Simple SSE Publisher
 class Publisher:
@@ -33,6 +38,16 @@ class Publisher:
 
 publisher = Publisher()
 
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -40,7 +55,7 @@ def get_db():
     finally:
         db.close()
 
-async def fetch_and_summarize():
+async def fetch_and_summarize_logic():
     db = SessionLocal()
     try:
         articles = await scrape_bleepingcomputer()
@@ -71,49 +86,13 @@ async def fetch_and_summarize():
                     "published_at": new_art.published_at.isoformat()
                 }
                 await publisher.publish(json.dumps(summary_json))
-
     except Exception as e:
         print(f"Error in fetch_and_summarize: {e}")
     finally:
         db.close()
 
-async def auto_delete_old_articles():
-    db = SessionLocal()
-    try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-        db.query(Article).filter(Article.created_at < cutoff).delete()
-        db.commit()
-    except Exception as e:
-        print(f"Error in auto_delete: {e}")
-    finally:
-        db.close()
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(fetch_and_summarize, 'interval', minutes=30)
-    scheduler.add_job(auto_delete_old_articles, 'interval', hours=24)
-    scheduler.start()
-    # Trigger initial scrape in background
-    asyncio.create_task(fetch_and_summarize())
-    yield
-    # Shutdown
-    scheduler.shutdown()
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 @app.get("/api/news")
 def get_news(db: Session = Depends(get_db)):
-    # Get last 24 hours of news
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     return db.query(Article).filter(Article.created_at >= cutoff).order_by(Article.created_at.desc()).all()
 
@@ -127,9 +106,15 @@ def clear_history(db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success"}
 
+@app.get("/api/cron")
+async def cron_trigger(background_tasks: BackgroundTasks):
+    """Endpoint to be triggered by Vercel Cron"""
+    background_tasks.add_task(fetch_and_summarize_logic)
+    return {"status": "scraping triggered"}
+
 @app.post("/api/refresh")
 async def trigger_refresh(background_tasks: BackgroundTasks):
-    background_tasks.add_task(fetch_and_summarize)
+    background_tasks.add_task(fetch_and_summarize_logic)
     return {"status": "refresh triggered"}
 
 @app.get("/api/stream")
@@ -146,7 +131,3 @@ async def message_stream(request: Request):
             publisher.unsubscribe(queue)
 
     return EventSourceResponse(event_generator())
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
