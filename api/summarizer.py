@@ -31,5 +31,12 @@ async def summarize_article(content: str):
         print("DEBUG: OpenAI response received successfully.")
         return response.choices[0].message.content
     except Exception as e:
-        print(f"CRITICAL ERROR in OpenAI summarization: {str(e)}")
-        return f"Summary not available. (Error: {str(e)})"
+        # Check if it's an OpenAI specific error
+        error_message = str(e)
+        if "insufficient_quota" in error_message.lower():
+            print("CRITICAL: OpenAI Quota exceeded. Please check billing: https://platform.openai.com/settings/organization/billing")
+        elif "invalid_api_key" in error_message.lower():
+            print("CRITICAL: OpenAI API Key is invalid or expired.")
+
+        print(f"FULL OPENAI ERROR: {error_message}")
+        return f"Summary not available. (Error: {error_message})"
