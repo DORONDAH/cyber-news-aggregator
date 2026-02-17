@@ -11,11 +11,11 @@ import os
 # Relative imports for Vercel
 try:
     from .models import SessionLocal, Article, engine
-    from .scraper import scrape_bleepingcomputer, scrape_thehackernews
+    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek
     from .summarizer import summarize_article
 except ImportError:
     from models import SessionLocal, Article, engine
-    from scraper import scrape_bleepingcomputer, scrape_thehackernews
+    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek
     from summarizer import summarize_article
 
 # Simple SSE Publisher
@@ -58,12 +58,39 @@ def get_db():
 async def fetch_and_summarize_logic():
     db = SessionLocal()
     try:
+        await publisher.publish(json.dumps({"status_update": "Scraping BleepingComputer..."}))
         articles = await scrape_bleepingcomputer()
+
+        await publisher.publish(json.dumps({"status_update": "Scraping TheHackerNews..."}))
         articles += await scrape_thehackernews()
 
+        await publisher.publish(json.dumps({"status_update": "Scraping SecurityWeek..."}))
+        articles += await scrape_securityweek()
+
+        # Auto-delete articles older than 7 days
+        try:
+            old_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            deleted_count = db.query(Article).filter(Article.created_at < old_cutoff).delete()
+            db.commit()
+            if deleted_count > 0:
+                print(f"Auto-deleted {deleted_count} articles older than 7 days.")
+        except Exception as e:
+            print(f"Error during auto-delete: {e}")
+
+        # Filter for new articles only
+        new_articles = []
         for art_data in articles:
             existing = db.query(Article).filter(Article.url == art_data['url']).first()
             if not existing:
+                new_articles.append(art_data)
+
+        total = len(new_articles)
+        if total == 0:
+            await publisher.publish(json.dumps({"status_update": "No new articles found."}))
+            await asyncio.sleep(2) # Give user time to see it
+        else:
+            for i, art_data in enumerate(new_articles):
+                await publisher.publish(json.dumps({"status_update": f"Summarizing article {i+1}/{total}..."}))
                 summary = await summarize_article(art_data['content'])
                 new_art = Article(
                     title=art_data['title'],
@@ -86,8 +113,11 @@ async def fetch_and_summarize_logic():
                     "published_at": new_art.published_at.isoformat()
                 }
                 await publisher.publish(json.dumps(summary_json))
+
+        await publisher.publish(json.dumps({"status_update": "Done!"}))
     except Exception as e:
         print(f"Error in fetch_and_summarize: {e}")
+        await publisher.publish(json.dumps({"status_update": f"Error: {str(e)}"}))
     finally:
         db.close()
 

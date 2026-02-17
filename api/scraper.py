@@ -17,59 +17,106 @@ async def scrape_bleepingcomputer():
         "Upgrade-Insecure-Requests": "1",
         "Cache-Control": "max-age=0",
     }
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
-        response = await client.get(url)
-        if response.status_code != 200:
-            logger.error(f"Failed to fetch BleepingComputer: {response.status_code}")
-            # Try to log a bit of the response to see if it's Cloudflare
-            logger.error(f"Response headers: {response.headers}")
-            return []
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch BleepingComputer: {response.status_code}")
+                return []
 
-        soup = BeautifulSoup(response.text, 'html.parser')
-        articles = []
-        # BleepingComputer uses div.bc_latest_news_text
-        for item in soup.find_all('div', class_='bc_latest_news_text'):
-            title_tag = item.find('h4')
-            if not title_tag: continue
-            link_tag = title_tag.find('a')
-            if not link_tag: continue
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            for item in soup.find_all('div', class_='bc_latest_news_text'):
+                title_tag = item.find('h4')
+                if not title_tag: continue
+                link_tag = title_tag.find('a')
+                if not link_tag: continue
 
-            title = link_tag.text.strip()
-            link = link_tag['href']
-            summary_tag = item.find('p')
-            summary = summary_tag.text.strip() if summary_tag else ""
+                title = link_tag.text.strip()
+                link = link_tag['href']
+                if link.startswith('/'):
+                    link = f"https://www.bleepingcomputer.com{link}"
+                summary_tag = item.find('p')
+                summary = summary_tag.text.strip() if summary_tag else ""
 
-            articles.append({
-                'title': title,
-                'url': link,
-                'content': summary,
-                'source': 'BleepingComputer',
-                'published_at': datetime.now(timezone.utc)
-            })
-        return articles
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'BleepingComputer',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping BleepingComputer: {str(e)}")
+        return []
 
 async def scrape_thehackernews():
     url = "https://thehackernews.com/"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        if response.status_code != 200:
-            logger.error(f"Failed to fetch TheHackerNews: {response.status_code}")
-            return []
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        articles = []
-        for item in soup.find_all('div', class_='body-post'):
-            title_tag = item.find('h2', class_='home-title')
-            title = title_tag.text.strip()
-            link = item.find('a', class_='story-link')['href']
-            summary_tag = item.find('div', class_='home-desc')
-            summary = summary_tag.text.strip() if summary_tag else ""
-            
-            articles.append({
-                'title': title,
-                'url': link,
-                'content': summary,
-                'source': 'TheHackerNews',
-                'published_at': datetime.now(timezone.utc)
-            })
-        return articles
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch TheHackerNews: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            for item in soup.find_all('div', class_='body-post'):
+                title_tag = item.find('h2', class_='home-title')
+                title = title_tag.text.strip()
+                link = item.find('a', class_='story-link')['href']
+                summary_tag = item.find('div', class_='home-desc')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'TheHackerNews',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping TheHackerNews: {str(e)}")
+        return []
+
+async def scrape_securityweek():
+    url = "https://www.securityweek.com/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch SecurityWeek: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            # Look for article items on the homepage
+            for item in soup.find_all('div', class_='article-content'):
+                title_tag = item.find('h2') or item.find('h3')
+                if not title_tag: continue
+                link_tag = title_tag.find('a')
+                if not link_tag: continue
+
+                title = link_tag.text.strip()
+                link = link_tag['href']
+                if link.startswith('/'):
+                    link = f"https://www.securityweek.com{link}"
+                summary_tag = item.find('div', class_='entry-content') or item.find('p')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'SecurityWeek',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping SecurityWeek: {str(e)}")
+        return []

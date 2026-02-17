@@ -8,6 +8,7 @@ function App() {
   const [view, setView] = useState('dashboard'); // 'dashboard' or 'history'
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('');
 
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -21,8 +22,23 @@ function App() {
     };
 
     eventSource.onmessage = (event) => {
-      const newArticle = JSON.parse(event.data);
-      setNews(prev => [newArticle, ...prev].slice(0, 20));
+      const data = JSON.parse(event.data);
+
+      if (data.status_update) {
+        setStatusMessage(data.status_update);
+        if (data.status_update === 'Done!') {
+          setLoading(false);
+          setTimeout(() => setStatusMessage(''), 3000);
+        } else {
+          setLoading(true);
+        }
+      } else {
+        setNews(prev => {
+          // Check if article already exists to prevent duplicates
+          if (prev.some(art => art.url === data.url)) return prev;
+          return [data, ...prev].slice(0, 20);
+        });
+      }
     };
 
     eventSource.onerror = () => {
@@ -72,10 +88,15 @@ function App() {
   };
 
   const refreshNews = async () => {
+    setLoading(true);
+    setStatusMessage('Requesting refresh...');
     try {
       await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
     } catch (err) {
       console.error('Failed to trigger refresh', err);
+      setStatusMessage('Refresh request failed');
+      setLoading(false);
+      setTimeout(() => setStatusMessage(''), 3000);
     }
   };
 
@@ -96,6 +117,13 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {statusMessage && (
+              <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-blue-900/20 border border-blue-500/30 rounded-lg text-[10px] sm:text-xs text-blue-400 animate-pulse">
+                <RefreshCw size={12} className="animate-spin" />
+                <span className="max-w-[100px] sm:max-w-none truncate">{statusMessage}</span>
+              </div>
+            )}
+
             <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${isConnected ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
               <Radio size={14} className={isConnected ? 'animate-pulse' : ''} />
               {isConnected ? 'Live' : 'Disconnected'}
@@ -166,7 +194,7 @@ function App() {
             {(view === 'dashboard' ? news : history).length === 0 && !loading && (
               <div className="col-span-full py-20 text-center">
                 <div className="text-slate-500 mb-2">No articles found.</div>
-                <div className="text-sm text-slate-600">The scraper runs every 30 minutes.</div>
+                <div className="text-sm text-slate-600">The scraper runs daily. Trigger a manual refresh to see latest news.</div>
               </div>
             )}
           </div>
