@@ -19,8 +19,8 @@ async def summarize_article(content: str):
         print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
         genai.configure(api_key=key)
 
-        # Use gemini-1.5-flash for high speed and free tier compatibility
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use gemini-pro for maximum compatibility across all API key types
+        model = genai.GenerativeModel('gemini-pro')
 
         prompt = f"You are a cybersecurity expert. Summarize the following news article into 3 key bullet points in non-technical language:\n\n{content}"
 
