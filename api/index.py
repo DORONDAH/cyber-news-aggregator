@@ -107,15 +107,15 @@ def clear_history(db: Session = Depends(get_db)):
     return {"status": "success"}
 
 @app.get("/api/cron")
-async def cron_trigger(background_tasks: BackgroundTasks):
+async def cron_trigger():
     """Endpoint to be triggered by Vercel Cron"""
-    background_tasks.add_task(fetch_and_summarize_logic)
-    return {"status": "scraping triggered"}
+    await fetch_and_summarize_logic()
+    return {"status": "scraping completed"}
 
 @app.post("/api/refresh")
-async def trigger_refresh(background_tasks: BackgroundTasks):
-    background_tasks.add_task(fetch_and_summarize_logic)
-    return {"status": "refresh triggered"}
+async def trigger_refresh():
+    await fetch_and_summarize_logic()
+    return {"status": "refresh completed"}
 
 @app.get("/api/stream")
 async def message_stream(request: Request):
