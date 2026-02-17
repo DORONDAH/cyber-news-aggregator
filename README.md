@@ -1,16 +1,32 @@
-# React + Vite
+# Cyber News Aggregator 🛡️
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A lightweight, high-efficiency dashboard for cybersecurity news, summarized by AI.
 
-Currently, two official plugins are available:
+## Features
+- **Unified Deployment**: Frontend (React) and Backend (FastAPI) deployed as a single unit on Vercel.
+- **AI Summarization**: Automatically generates 3 key bullet points for each article using OpenAI GPT-4o-mini.
+- **Real-time Updates**: Uses Server-Sent Events (SSE) to push new summaries to the UI.
+- **Automated Scraper**: Vercel Cron Job triggers news aggregation every 30 minutes.
+- **Privacy & History**: Stores articles for 7 days with local history management.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Tech Stack
+- **Frontend**: React (Vite), Tailwind CSS v4, Lucide Icons.
+- **Backend**: Python (FastAPI), SQLAlchemy (SQLite), BeautifulSoup4.
+- **Hosting**: Vercel (Serverless Functions + Cron Jobs).
 
-## React Compiler
+## Deployment Instructions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 1. Vercel Setup
+1. Import this repository into **Vercel**.
+2. Add `OPENAI_API_KEY` to the **Environment Variables** in project settings.
+3. Deploy!
 
-## Expanding the ESLint configuration
+### 2. Local Development
+1. Install Python dependencies: `pip install -r requirements.txt`
+2. Install Node dependencies: `npm install`
+3. Run the dev server: `npm run dev`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Project Structure
+- `/api/index.py`: Unified API entry point for Vercel.
+- `/src/`: React frontend source code.
+- `vercel.json`: Deployment and Cron job configuration.
