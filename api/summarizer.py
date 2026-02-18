@@ -19,10 +19,10 @@ async def summarize_article(content: str):
         print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
         genai.configure(api_key=key)
 
-        # Use gemini-1.5-flash for maximum compatibility and speed
+        # Use gemini-2.5-flash as requested for maximum compatibility with newer API keys
         # We also add safety_settings to ensure cybersecurity news isn't blocked
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-2.5-flash',
             safety_settings=[
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
