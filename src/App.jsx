@@ -19,6 +19,8 @@ function App() {
   const [hideRead, setHideRead] = useState(false);
   const searchInputRef = useRef(null);
 
+  const categories = ['All', 'Ransomware', 'Vulnerability', 'Data Breach', 'Malware', 'Policy/Legal', 'General'];
+
   useEffect(() => {
     localStorage.setItem('readArticles', JSON.stringify(readArticles));
   }, [readArticles]);
@@ -394,6 +396,7 @@ function App() {
             <div className="relative flex-grow md:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search news..."
                 value={searchQuery}

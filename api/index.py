@@ -163,10 +163,9 @@ async def summarize_batch_logic(limit: int = 5):
             }
             await publisher.publish(json.dumps(summary_json))
 
-            # Small 2s delay between batch items for UI smoothness,
-            # but we rely on the button for the big blocks
+            # 12s delay between batch items to strictly respect 5 RPM Gemini limit
             if i < total - 1:
-                await asyncio.sleep(2)
+                await asyncio.sleep(12)
 
     except Exception as e:
         print(f"Error in batch summarize: {e}")
