@@ -36,10 +36,29 @@ const NewsCard = ({ article, isRead, onToggleRead }) => {
     return colors[cat] || colors['General'];
   };
 
+  const getFavicon = (url) => {
+    try {
+      const domain = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+    } catch (e) {
+      return null;
+    }
+  };
+
   return (
     <div className={`bg-slate-800 rounded-lg p-6 shadow-lg border transition-all flex flex-col relative group ${isRead ? 'opacity-40 border-slate-700 grayscale-[0.5]' : 'border-slate-700 hover:border-blue-500'}`}>
       <div className="flex justify-between items-start mb-2 gap-2">
-        <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+        <div className="flex items-start gap-3">
+          {getFavicon(article.url) && (
+            <img
+              src={getFavicon(article.url)}
+              alt=""
+              className="w-5 h-5 mt-1 rounded-sm flex-shrink-0"
+              onError={(e) => e.target.style.display = 'none'}
+            />
+          )}
+          <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+        </div>
         <div className="flex gap-1 flex-shrink-0">
           <button
             onClick={() => onToggleRead(article.url)}

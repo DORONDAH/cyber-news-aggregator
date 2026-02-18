@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download } from 'lucide-react';
 import NewsCard from './components/NewsCard';
 
 function App() {
@@ -17,10 +17,53 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [hideRead, setHideRead] = useState(false);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem('readArticles', JSON.stringify(readArticles));
   }, [readArticles]);
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Don't trigger if user is typing in the search bar
+      if (document.activeElement.tagName === 'INPUT') return;
+
+      if (e.key === 's') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'r') {
+        refreshNews();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  const exportToCSV = () => {
+    if (filteredItems.length === 0) return;
+
+    const headers = ['Title', 'Source', 'Category', 'URL', 'Summary', 'Published At'];
+    const rows = filteredItems.map(art => [
+      `"${art.title.replace(/"/g, '""')}"`,
+      `"${art.source}"`,
+      `"${art.category || 'General'}"`,
+      `"${art.url}"`,
+      `"${(art.summary || '').replace(/"/g, '""')}"`,
+      `"${art.published_at}"`
+    ]);
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `cyber_news_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const toggleRead = (articleUrl) => {
     setReadArticles(prev =>
@@ -241,9 +284,17 @@ function App() {
             <button
               onClick={refreshNews}
               className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
-              title="Scrape All Sources"
+              title="Scrape All Sources (Shortcut: R)"
             >
               <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
+
+            <button
+              onClick={exportToCSV}
+              className="p-2 text-slate-400 hover:text-green-400 hover:bg-green-900/20 rounded-lg transition-colors"
+              title="Export to CSV"
+            >
+              <Download size={20} />
             </button>
 
             {hasPendingSummaries && (
