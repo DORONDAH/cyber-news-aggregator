@@ -59,6 +59,11 @@ function App() {
       const res = await fetch(`${API_BASE}/api/news`);
       const data = await res.json();
       setNews(data);
+
+      // If no news is found (e.g. after a DB reset), trigger a refresh automatically
+      if (data.length === 0 && view === 'dashboard') {
+        refreshNews();
+      }
     } catch (err) {
       console.error('Failed to fetch news', err);
     } finally {
