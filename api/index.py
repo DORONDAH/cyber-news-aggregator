@@ -130,6 +130,12 @@ async def fetch_and_summarize_logic():
                 }
                 await publisher.publish(json.dumps(summary_json))
 
+                # Respect Free Tier Rate Limit (5 requests per minute)
+                # We wait 12 seconds between articles to stay under the limit
+                if i < total - 1:
+                    await publisher.publish(json.dumps({"status_update": f"Respecting rate limit (12s)..."}))
+                    await asyncio.sleep(12)
+
         await publisher.publish(json.dumps({"status_update": "Done!"}))
     except Exception as e:
         print(f"Error in fetch_and_summarize: {e}")
