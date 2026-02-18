@@ -19,8 +19,17 @@ async def summarize_article(content: str):
         print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
         genai.configure(api_key=key)
 
-        # Use gemini-pro for maximum compatibility across all API key types
-        model = genai.GenerativeModel('gemini-pro')
+        # Use gemini-1.5-pro for the latest "Pro" capabilities
+        # We also add safety_settings to ensure cybersecurity news isn't blocked
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-pro',
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        )
 
         prompt = f"You are a cybersecurity expert. Summarize the following news article into 3 key bullet points in non-technical language:\n\n{content}"
 
