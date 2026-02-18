@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search } from 'lucide-react';
 import NewsCard from './components/NewsCard';
 
 function App() {
@@ -9,6 +9,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -106,6 +107,18 @@ function App() {
     }
   }, [view]);
 
+  const filteredItems = useMemo(() => {
+    const items = view === 'dashboard' ? news : history;
+    if (!searchQuery.trim()) return items;
+
+    const query = searchQuery.toLowerCase();
+    return items.filter(item =>
+      item.title.toLowerCase().includes(query) ||
+      item.summary.toLowerCase().includes(query) ||
+      item.source.toLowerCase().includes(query)
+    );
+  }, [news, history, view, searchQuery]);
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -167,19 +180,32 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-grow p-6 max-w-6xl mx-auto w-full">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            {view === 'dashboard' ? 'Latest Security Summaries' : '7-Day History'}
-            {loading && <RefreshCw size={18} className="animate-spin text-slate-500" />}
-          </h2>
-          {view === 'dashboard' && (
-            <span className="text-sm text-slate-500">
-              Showing {news.length} recent items
-            </span>
-          )}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              {view === 'dashboard' ? 'Latest Security Summaries' : '7-Day History'}
+              {loading && <RefreshCw size={18} className="animate-spin text-slate-500" />}
+            </h2>
+            {view === 'dashboard' && (
+              <span className="text-sm text-slate-500">
+                {filteredItems.length} items
+              </span>
+            )}
+          </div>
+
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+            <input
+              type="text"
+              placeholder="Search news..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
         </div>
 
-        {loading && news.length === 0 ? (
+        {loading && filteredItems.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <div key={i} className="h-64 bg-slate-800 rounded-lg border border-slate-700"></div>
@@ -187,14 +213,18 @@ function App() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(view === 'dashboard' ? news : history).map((article) => (
+            {filteredItems.map((article) => (
               <NewsCard key={article.id} article={article} />
             ))}
 
-            {(view === 'dashboard' ? news : history).length === 0 && !loading && (
+            {filteredItems.length === 0 && !loading && (
               <div className="col-span-full py-20 text-center">
-                <div className="text-slate-500 mb-2">No articles found.</div>
-                <div className="text-sm text-slate-600">The scraper runs daily. Trigger a manual refresh to see latest news.</div>
+                <div className="text-slate-500 mb-2">
+                  {searchQuery ? `No results found for "${searchQuery}"` : 'No articles found.'}
+                </div>
+                <div className="text-sm text-slate-600">
+                  {searchQuery ? 'Try a different search term.' : 'The scraper runs daily. Trigger a manual refresh to see latest news.'}
+                </div>
               </div>
             )}
           </div>
