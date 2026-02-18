@@ -91,13 +91,28 @@ async def fetch_and_summarize_logic():
         else:
             for i, art_data in enumerate(new_articles):
                 await publisher.publish(json.dumps({"status_update": f"Summarizing article {i+1}/{total}..."}))
-                summary = await summarize_article(art_data['content'])
+                raw_ai_output = await summarize_article(art_data['content'])
+
+                # Parse CATEGORY and SUMMARY from AI output
+                category = "General"
+                summary = raw_ai_output
+
+                if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
+                    try:
+                        parts = raw_ai_output.split("SUMMARY:")
+                        category_part = parts[0].replace("CATEGORY:", "").strip()
+                        summary = parts[1].strip()
+                        category = category_part
+                    except Exception:
+                        pass # Fallback to General and full text if parsing fails
+
                 new_art = Article(
                     title=art_data['title'],
                     url=art_data['url'],
                     content=art_data['content'],
                     summary=summary,
                     source=art_data['source'],
+                    category=category,
                     published_at=art_data['published_at']
                 )
                 db.add(new_art)
@@ -110,6 +125,7 @@ async def fetch_and_summarize_logic():
                     "url": new_art.url,
                     "summary": new_art.summary,
                     "source": new_art.source,
+                    "category": new_art.category,
                     "published_at": new_art.published_at.isoformat()
                 }
                 await publisher.publish(json.dumps(summary_json))

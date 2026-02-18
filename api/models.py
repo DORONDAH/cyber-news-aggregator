@@ -24,6 +24,7 @@ class Article(Base):
     content = Column(Text)
     summary = Column(Text)
     source = Column(String)
+    category = Column(String, default="General")
     published_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 

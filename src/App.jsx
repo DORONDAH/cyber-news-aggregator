@@ -11,6 +11,7 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSource, setSelectedSource] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -116,20 +117,32 @@ function App() {
       items = items.filter(item => item.source === selectedSource);
     }
 
+    // Filter by Category
+    if (selectedCategory !== 'All') {
+      items = items.filter(item => item.category === selectedCategory);
+    }
+
     if (!searchQuery.trim()) return items;
 
     const query = searchQuery.toLowerCase();
     return items.filter(item =>
       item.title.toLowerCase().includes(query) ||
       item.summary.toLowerCase().includes(query) ||
-      item.source.toLowerCase().includes(query)
+      item.source.toLowerCase().includes(query) ||
+      (item.category && item.category.toLowerCase().includes(query))
     );
-  }, [news, history, view, searchQuery, selectedSource]);
+  }, [news, history, view, searchQuery, selectedSource, selectedCategory]);
 
   const sources = useMemo(() => {
     const allItems = [...news, ...history];
     const uniqueSources = ['All', ...new Set(allItems.map(item => item.source))];
     return uniqueSources;
+  }, [news, history]);
+
+  const categories = useMemo(() => {
+    const allItems = [...news, ...history];
+    const uniqueCats = ['All', ...new Set(allItems.map(item => item.category).filter(Boolean))];
+    return uniqueCats;
   }, [news, history]);
 
   return (
@@ -222,9 +235,21 @@ function App() {
               value={selectedSource}
               onChange={(e) => setSelectedSource(e.target.value)}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors text-slate-300"
+              title="Filter by Source"
             >
               {sources.map(source => (
                 <option key={source} value={source}>{source}</option>
+              ))}
+            </select>
+
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors text-slate-300"
+              title="Filter by Category"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
           </div>

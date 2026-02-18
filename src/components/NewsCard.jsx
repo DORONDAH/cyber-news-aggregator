@@ -24,9 +24,21 @@ const NewsCard = ({ article }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const getCategoryColor = (cat) => {
+    const colors = {
+      'Ransomware': 'bg-red-900/40 text-red-400 border-red-500/30',
+      'Vulnerability': 'bg-orange-900/40 text-orange-400 border-orange-500/30',
+      'Data Breach': 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+      'Malware': 'bg-yellow-900/40 text-yellow-400 border-yellow-500/30',
+      'Policy/Legal': 'bg-blue-900/40 text-blue-400 border-blue-500/30',
+      'General': 'bg-slate-700/50 text-slate-400 border-slate-600/30'
+    };
+    return colors[cat] || colors['General'];
+  };
+
   return (
     <div className="bg-slate-800 rounded-lg p-6 shadow-lg border border-slate-700 hover:border-blue-500 transition-colors flex flex-col relative group">
-      <div className="flex justify-between items-start mb-4 gap-2">
+      <div className="flex justify-between items-start mb-2 gap-2">
         <h3 className="text-xl font-bold text-blue-400 leading-tight">{article.title}</h3>
         <button
           onClick={copyToClipboard}
@@ -35,6 +47,12 @@ const NewsCard = ({ article }) => {
         >
           {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
         </button>
+      </div>
+
+      <div className="mb-4">
+        <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${getCategoryColor(article.category)}`}>
+          {article.category || 'General'}
+        </span>
       </div>
 
       <div className="text-slate-300 mb-6 whitespace-pre-line text-sm flex-grow">

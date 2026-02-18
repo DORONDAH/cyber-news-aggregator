@@ -31,9 +31,19 @@ async def summarize_article(content: str):
             ]
         )
 
-        prompt = f"You are a cybersecurity expert. Summarize the following news article into 3 key bullet points in non-technical language:\n\n{content}"
+        prompt = f"""You are a cybersecurity expert. Analyze the following news article:
+{content}
 
-        print(f"DEBUG: Calling Gemini API...")
+Tasks:
+1. Select the most appropriate category from this list: Ransomware, Vulnerability, Data Breach, Malware, Policy/Legal, General.
+2. Summarize the article into 3 key bullet points in non-technical language.
+
+Output format:
+CATEGORY: [Selected Category]
+SUMMARY:
+[3 Bullet Points]"""
+
+        print(f"DEBUG: Calling Gemini API for summary and category...")
         response = model.generate_content(prompt)
 
         # Handle the case where the response might be blocked or empty
