@@ -56,7 +56,16 @@ const NewsCard = ({ article }) => {
       </div>
 
       <div className="text-slate-300 mb-6 whitespace-pre-line text-sm flex-grow">
-        {article.summary}
+        {article.summary ? (
+          article.summary
+        ) : (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-4 bg-slate-700/50 rounded w-3/4"></div>
+            <div className="h-4 bg-slate-700/50 rounded w-5/6"></div>
+            <div className="h-4 bg-slate-700/50 rounded w-2/3"></div>
+            <p className="text-slate-500 italic mt-4 text-xs">Waiting for AI summary... Click "AI Next 5" to process.</p>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between items-center text-xs text-slate-500 mt-auto border-t border-slate-700/50 pt-4">

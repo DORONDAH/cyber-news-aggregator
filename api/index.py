@@ -55,7 +55,7 @@ def get_db():
     finally:
         db.close()
 
-async def fetch_and_summarize_logic():
+async def fetch_and_summarize_logic(limit_ai: int = 5):
     db = SessionLocal()
     try:
         await publisher.publish(json.dumps({"status_update": "Scraping BleepingComputer..."}))
@@ -72,69 +72,33 @@ async def fetch_and_summarize_logic():
             old_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             deleted_count = db.query(Article).filter(Article.created_at < old_cutoff).delete()
             db.commit()
-            if deleted_count > 0:
-                print(f"Auto-deleted {deleted_count} articles older than 7 days.")
         except Exception as e:
             print(f"Error during auto-delete: {e}")
 
         # Filter for new articles only
-        new_articles = []
+        new_count = 0
         for art_data in articles:
             existing = db.query(Article).filter(Article.url == art_data['url']).first()
             if not existing:
-                new_articles.append(art_data)
-
-        total = len(new_articles)
-        if total == 0:
-            await publisher.publish(json.dumps({"status_update": "No new articles found."}))
-            await asyncio.sleep(2) # Give user time to see it
-        else:
-            for i, art_data in enumerate(new_articles):
-                await publisher.publish(json.dumps({"status_update": f"Summarizing article {i+1}/{total}..."}))
-                raw_ai_output = await summarize_article(art_data['content'])
-
-                # Parse CATEGORY and SUMMARY from AI output
-                category = "General"
-                summary = raw_ai_output
-
-                if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
-                    try:
-                        parts = raw_ai_output.split("SUMMARY:")
-                        category_part = parts[0].replace("CATEGORY:", "").strip()
-                        summary = parts[1].strip()
-                        category = category_part
-                    except Exception:
-                        pass # Fallback to General and full text if parsing fails
-
                 new_art = Article(
                     title=art_data['title'],
                     url=art_data['url'],
                     content=art_data['content'],
-                    summary=summary,
+                    summary=None, # No summary yet
                     source=art_data['source'],
-                    category=category,
+                    category="General",
                     published_at=art_data['published_at']
                 )
                 db.add(new_art)
-                db.commit()
-                db.refresh(new_art)
+                new_count += 1
 
-                summary_json = {
-                    "id": new_art.id,
-                    "title": new_art.title,
-                    "url": new_art.url,
-                    "summary": new_art.summary,
-                    "source": new_art.source,
-                    "category": new_art.category,
-                    "published_at": new_art.published_at.isoformat()
-                }
-                await publisher.publish(json.dumps(summary_json))
+        db.commit()
 
-                # Respect Free Tier Rate Limit (5 requests per minute)
-                # We wait 12 seconds between articles to stay under the limit
-                if i < total - 1:
-                    await publisher.publish(json.dumps({"status_update": f"Respecting rate limit (12s)..."}))
-                    await asyncio.sleep(12)
+        if new_count > 0:
+            await publisher.publish(json.dumps({"status_update": f"Found {new_count} new articles. Starting AI..."}))
+            await summarize_batch_logic(limit=limit_ai)
+        else:
+            await publisher.publish(json.dumps({"status_update": "No new articles found."}))
 
         await publisher.publish(json.dumps({"status_update": "Done!"}))
     except Exception as e:
@@ -142,6 +106,62 @@ async def fetch_and_summarize_logic():
         await publisher.publish(json.dumps({"status_update": f"Error: {str(e)}"}))
     finally:
         db.close()
+
+async def summarize_batch_logic(limit: int = 5):
+    db = SessionLocal()
+    try:
+        # Get articles that don't have a summary yet
+        pending = db.query(Article).filter(Article.summary == None).order_by(Article.created_at.desc()).limit(limit).all()
+
+        if not pending:
+            await publisher.publish(json.dumps({"status_update": "All articles are already summarized."}))
+            return
+
+        total = len(pending)
+        for i, article in enumerate(pending):
+            await publisher.publish(json.dumps({"status_update": f"AI Summarizing {i+1}/{total}..."}))
+            raw_ai_output = await summarize_article(article.content)
+
+            # Parse CATEGORY and SUMMARY
+            category = "General"
+            summary = raw_ai_output
+            if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
+                try:
+                    parts = raw_ai_output.split("SUMMARY:")
+                    category = parts[0].replace("CATEGORY:", "").strip()
+                    summary = parts[1].strip()
+                except: pass
+
+            article.summary = summary
+            article.category = category
+            db.commit()
+
+            # Push update to UI
+            summary_json = {
+                "id": article.id,
+                "title": article.title,
+                "url": article.url,
+                "summary": article.summary,
+                "source": article.source,
+                "category": article.category,
+                "published_at": article.published_at.isoformat()
+            }
+            await publisher.publish(json.dumps(summary_json))
+
+            # Small 2s delay between batch items for UI smoothness,
+            # but we rely on the button for the big blocks
+            if i < total - 1:
+                await asyncio.sleep(2)
+
+    except Exception as e:
+        print(f"Error in batch summarize: {e}")
+    finally:
+        db.close()
+
+@app.post("/api/summarize-more")
+async def summarize_more():
+    await summarize_batch_logic(limit=5)
+    return {"status": "batch completed"}
 
 @app.get("/api/news")
 def get_news(db: Session = Depends(get_db)):

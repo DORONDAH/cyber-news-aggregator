@@ -37,9 +37,24 @@ function App() {
         }
       } else {
         setNews(prev => {
-          // Check if article already exists to prevent duplicates
-          if (prev.some(art => art.url === data.url)) return prev;
-          return [data, ...prev].slice(0, 20);
+          const index = prev.findIndex(art => art.url === data.url);
+          if (index !== -1) {
+            // Update existing article with new summary/category
+            const updated = [...prev];
+            updated[index] = { ...updated[index], ...data };
+            return updated;
+          }
+          // Add new article
+          return [data, ...prev].slice(0, 50);
+        });
+        setHistory(prev => {
+          const index = prev.findIndex(art => art.url === data.url);
+          if (index !== -1) {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], ...data };
+            return updated;
+          }
+          return prev;
         });
       }
     };
@@ -108,6 +123,19 @@ function App() {
     }
   };
 
+  const summarizeMore = async () => {
+    setLoading(true);
+    setStatusMessage('Requesting 5 more summaries...');
+    try {
+      await fetch(`${API_BASE}/api/summarize-more`, { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to summarize more', err);
+      setStatusMessage('Request failed');
+      setLoading(false);
+      setTimeout(() => setStatusMessage(''), 3000);
+    }
+  };
+
   useEffect(() => {
     if (view === 'history') {
       fetchHistory();
@@ -144,11 +172,9 @@ function App() {
     return uniqueSources;
   }, [news, history]);
 
-  const categories = useMemo(() => {
-    const allItems = [...news, ...history];
-    const uniqueCats = ['All', ...new Set(allItems.map(item => item.category).filter(Boolean))];
-    return uniqueCats;
-  }, [news, history]);
+  const hasPendingSummaries = useMemo(() => {
+    return (view === 'dashboard' ? news : history).some(art => !art.summary);
+  }, [news, history, view]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -193,10 +219,21 @@ function App() {
             <button
               onClick={refreshNews}
               className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
-              title="Trigger Manual Refresh"
+              title="Scrape All Sources"
             >
               <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
             </button>
+
+            {hasPendingSummaries && (
+              <button
+                onClick={summarizeMore}
+                disabled={loading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                AI Next 5
+              </button>
+            )}
 
             <button
               onClick={clearHistory}
