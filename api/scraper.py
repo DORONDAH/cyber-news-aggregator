@@ -198,3 +198,129 @@ async def scrape_zerofox():
     except Exception as e:
         logger.error(f"Error scraping ZeroFox: {str(e)}")
         return []
+
+async def scrape_infosecurity():
+    url = "https://www.infosecurity-magazine.com/news/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch Infosecurity: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            for item in soup.find_all('div', class_='news-item')[:10]:
+                title_tag = item.find('h3')
+                if not title_tag: continue
+                link_tag = title_tag.find('a')
+                if not link_tag: continue
+
+                title = title_tag.text.strip()
+                link = link_tag['href']
+                if link.startswith('/'):
+                    link = f"https://www.infosecurity-magazine.com{link}"
+
+                summary_tag = item.find('p')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'Infosecurity Mag',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping Infosecurity: {str(e)}")
+        return []
+
+async def scrape_cyberscoop():
+    url = "https://cyberscoop.com/news/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch CyberScoop: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            # CyberScoop uses article tags with specific classes
+            for item in soup.find_all('article', class_='post')[:10]:
+                title_tag = item.find('h2', class_='entry-title')
+                if not title_tag: continue
+                link_tag = title_tag.find('a')
+                if not link_tag: continue
+
+                title = title_tag.text.strip()
+                link = link_tag['href']
+
+                summary_tag = item.find('div', class_='entry-content') or item.find('p')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'CyberScoop',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping CyberScoop: {str(e)}")
+        return []
+
+async def scrape_cisa():
+    url = "https://www.cisa.gov/news-events/cybersecurity-advisories"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch CISA: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+            # CISA advisories feed
+            for item in soup.find_all('div', class_='views-row')[:10]:
+                title_tag = item.find('h3') or item.find('a')
+                if not title_tag: continue
+
+                link = ""
+                if title_tag.name == 'a':
+                    link = title_tag['href']
+                    title = title_tag.text.strip()
+                else:
+                    link_tag = title_tag.find('a')
+                    if not link_tag: continue
+                    link = link_tag['href']
+                    title = title_tag.text.strip()
+
+                if link.startswith('/'):
+                    link = f"https://www.cisa.gov{link}"
+
+                summary_tag = item.find('div', class_='field--name-field-summary') or item.find('p')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'CISA',
+                    'published_at': datetime.now(timezone.utc)
+                })
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping CISA: {str(e)}")
+        return []

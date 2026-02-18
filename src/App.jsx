@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download } from 'lucide-react';
+import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download, Zap } from 'lucide-react';
 import NewsCard from './components/NewsCard';
 
 function App() {
@@ -241,6 +241,62 @@ function App() {
     return (view === 'dashboard' ? news : history).some(art => !art.summary);
   }, [news, history, view]);
 
+  // Logic to identify stories covered by multiple sources
+  const topStories = useMemo(() => {
+    if (view !== 'dashboard' || news.length === 0) return [];
+
+    const groups = [];
+    const processed = new Set();
+
+    // Simple word-overlap similarity check
+    const areSimilar = (t1, t2) => {
+      const words1 = new Set(t1.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+      const words2 = new Set(t2.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+      if (words1.size === 0 || words2.size === 0) return false;
+
+      let overlap = 0;
+      words1.forEach(w => { if (words2.has(w)) overlap++; });
+
+      const similarity = overlap / Math.min(words1.size, words2.size);
+      return similarity > 0.4; // 40% significant word overlap
+    };
+
+    news.forEach((art, i) => {
+      if (processed.has(i)) return;
+
+      const group = [art];
+      processed.add(i);
+
+      news.forEach((other, j) => {
+        if (processed.has(j)) return;
+        if (areSimilar(art.title, other.title)) {
+          group.push(other);
+          processed.add(j);
+        }
+      });
+
+      // It's a "Top Story" if covered by 2+ DIFFERENT sources
+      const sourcesInGroup = new Set(group.map(g => g.source));
+      if (sourcesInGroup.size >= 2) {
+        // Pick the most complete article (one with summary) to represent the group
+        const representative = group.find(g => g.summary) || group[0];
+        groups.push({
+          ...representative,
+          allSources: Array.from(sourcesInGroup),
+          groupCount: group.length
+        });
+      }
+    });
+
+    return groups;
+  }, [news, view]);
+
+  // Filter regular news to not duplicate what's in Top Stories (optional, but cleaner)
+  const finalFilteredItems = useMemo(() => {
+    const topStoryUrls = new Set(topStories.map(s => s.url));
+    return filteredItems.filter(item => !topStoryUrls.has(item.url));
+  }, [filteredItems, topStories]);
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -380,7 +436,49 @@ function App() {
           </div>
         </div>
 
-        {loading && filteredItems.length === 0 ? (
+        {/* Top Stories / Trending Section */}
+        {view === 'dashboard' && topStories.length > 0 && !searchQuery && selectedSource === 'All' && selectedCategory === 'All' && (
+          <div className="mb-12">
+            <div className="flex items-center gap-2 mb-6 text-orange-500">
+              <Zap size={20} fill="currentColor" />
+              <h2 className="text-xl font-bold tracking-tight uppercase">Trending Now</h2>
+              <span className="text-xs font-medium px-2 py-0.5 bg-orange-900/30 border border-orange-500/30 rounded-full ml-2">
+                Multiple Sources
+              </span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {topStories.map((story) => (
+                <div key={story.id} className="relative group">
+                  {/* Highlight Border Effect */}
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                  <NewsCard
+                    article={story}
+                    isRead={readArticles.includes(story.url)}
+                    onToggleRead={toggleRead}
+                  />
+                  {/* Multi-source indicator badges */}
+                  <div className="absolute top-2 left-12 flex gap-1">
+                    {story.allSources.map(src => (
+                      <span key={src} className="text-[8px] bg-slate-900/90 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50 shadow-sm">
+                        {src}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-12 border-b border-slate-800"></div>
+          </div>
+        )}
+
+        {/* Regular News Grid */}
+        <div className="flex items-center gap-2 mb-6">
+          <h2 className="text-lg font-semibold text-slate-400 uppercase tracking-wider">
+            {view === 'dashboard' ? 'Recent Feed' : '7-Day History'}
+          </h2>
+        </div>
+
+        {loading && finalFilteredItems.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <div key={i} className="h-64 bg-slate-800 rounded-lg border border-slate-700"></div>
@@ -388,7 +486,7 @@ function App() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredItems.map((article) => (
+            {finalFilteredItems.map((article) => (
               <NewsCard
                 key={article.id}
                 article={article}
@@ -397,7 +495,7 @@ function App() {
               />
             ))}
 
-            {filteredItems.length === 0 && !loading && (
+            {finalFilteredItems.length === 0 && !loading && (
               <div className="col-span-full py-20 text-center">
                 <div className="text-slate-500 mb-2">
                   {searchQuery ? `No results found for "${searchQuery}"` : 'No articles found.'}
