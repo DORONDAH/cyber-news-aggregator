@@ -12,8 +12,8 @@ async def summarize_article(content: str):
     key = os.getenv("GEMINI_API_KEY")
 
     if not key or key == "your_gemini_api_key_here":
-        print("DEBUG: GEMINI_API_KEY is missing. Falling back to mock.")
-        return "• This is a mock summary.\n• Please add a GEMINI_API_KEY to your Vercel Environment Variables.\n• You can get one for free at aistudio.google.com."
+        print(f"DEBUG: GEMINI_API_KEY is missing. (Found: {key})")
+        return f"• Summarizer: GEMINI_API_KEY not found in Vercel.\n• Please check your Vercel Environment Variables.\n• Make sure the name is exactly GEMINI_API_KEY."
 
     try:
         print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
