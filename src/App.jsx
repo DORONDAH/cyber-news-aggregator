@@ -10,6 +10,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSource, setSelectedSource] = useState('All');
 
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -108,7 +109,13 @@ function App() {
   }, [view]);
 
   const filteredItems = useMemo(() => {
-    const items = view === 'dashboard' ? news : history;
+    let items = view === 'dashboard' ? news : history;
+
+    // Filter by Source
+    if (selectedSource !== 'All') {
+      items = items.filter(item => item.source === selectedSource);
+    }
+
     if (!searchQuery.trim()) return items;
 
     const query = searchQuery.toLowerCase();
@@ -117,7 +124,13 @@ function App() {
       item.summary.toLowerCase().includes(query) ||
       item.source.toLowerCase().includes(query)
     );
-  }, [news, history, view, searchQuery]);
+  }, [news, history, view, searchQuery, selectedSource]);
+
+  const sources = useMemo(() => {
+    const allItems = [...news, ...history];
+    const uniqueSources = ['All', ...new Set(allItems.map(item => item.source))];
+    return uniqueSources;
+  }, [news, history]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -193,15 +206,27 @@ function App() {
             )}
           </div>
 
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Search news..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-            />
+          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4">
+            <div className="relative flex-grow md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Search news..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            <select
+              value={selectedSource}
+              onChange={(e) => setSelectedSource(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors text-slate-300"
+            >
+              {sources.map(source => (
+                <option key={source} value={source}>{source}</option>
+              ))}
+            </select>
           </div>
         </div>
 
