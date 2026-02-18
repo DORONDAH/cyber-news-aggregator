@@ -36,11 +36,20 @@ async def summarize_article(content: str):
         print(f"DEBUG: Calling Gemini API...")
         response = model.generate_content(prompt)
 
-        if response and response.text:
-            print("DEBUG: Gemini response received successfully.")
-            return response.text
-        else:
-            return "Summary not available. (Empty response from AI)"
+        # Handle the case where the response might be blocked or empty
+        if not response:
+            return "Summary not available. (No response from AI)"
+
+        try:
+            if response.text:
+                print("DEBUG: Gemini response received successfully.")
+                return response.text
+        except ValueError:
+            # This happens if the response was blocked by safety filters
+            # even after we set them to BLOCK_NONE
+            return "Summary blocked by Gemini safety filters. Please check the content for sensitive terms."
+
+        return "Summary not available. (Empty response from AI)"
 
     except Exception as e:
         error_message = str(e)
