@@ -12,6 +12,23 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSource, setSelectedSource] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [readArticles, setReadArticles] = useState(() => {
+    const saved = localStorage.getItem('readArticles');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [hideRead, setHideRead] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('readArticles', JSON.stringify(readArticles));
+  }, [readArticles]);
+
+  const toggleRead = (articleUrl) => {
+    setReadArticles(prev =>
+      prev.includes(articleUrl)
+        ? prev.filter(url => url !== articleUrl)
+        : [...prev, articleUrl]
+    );
+  };
 
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -155,6 +172,11 @@ function App() {
       items = items.filter(item => item.category === selectedCategory);
     }
 
+    // Filter by Read Status
+    if (hideRead) {
+      items = items.filter(item => !readArticles.includes(item.url));
+    }
+
     if (!searchQuery.trim()) return items;
 
     const query = searchQuery.toLowerCase();
@@ -294,6 +316,16 @@ function App() {
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
+
+            <label className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:border-slate-600 transition-colors">
+              <input
+                type="checkbox"
+                checked={hideRead}
+                onChange={(e) => setHideRead(e.target.checked)}
+                className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
+              />
+              <span className="text-sm text-slate-300 whitespace-nowrap">Hide Read</span>
+            </label>
           </div>
         </div>
 
@@ -306,7 +338,12 @@ function App() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems.map((article) => (
-              <NewsCard key={article.id} article={article} />
+              <NewsCard
+                key={article.id}
+                article={article}
+                isRead={readArticles.includes(article.url)}
+                onToggleRead={toggleRead}
+              />
             ))}
 
             {filteredItems.length === 0 && !loading && (

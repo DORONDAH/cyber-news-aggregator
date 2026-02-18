@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ExternalLink, Clock, Copy, Check } from 'lucide-react';
+import { ExternalLink, Clock, Copy, Check, Eye, EyeOff } from 'lucide-react';
 
-const NewsCard = ({ article }) => {
+const NewsCard = ({ article, isRead, onToggleRead }) => {
   const [copied, setCopied] = useState(false);
 
   const formatDate = (dateStr) => {
@@ -37,16 +37,25 @@ const NewsCard = ({ article }) => {
   };
 
   return (
-    <div className="bg-slate-800 rounded-lg p-6 shadow-lg border border-slate-700 hover:border-blue-500 transition-colors flex flex-col relative group">
+    <div className={`bg-slate-800 rounded-lg p-6 shadow-lg border transition-all flex flex-col relative group ${isRead ? 'opacity-40 border-slate-700 grayscale-[0.5]' : 'border-slate-700 hover:border-blue-500'}`}>
       <div className="flex justify-between items-start mb-2 gap-2">
-        <h3 className="text-xl font-bold text-blue-400 leading-tight">{article.title}</h3>
-        <button
-          onClick={copyToClipboard}
-          className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-md transition-all flex-shrink-0"
-          title="Copy Summary"
-        >
-          {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-        </button>
+        <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+        <div className="flex gap-1 flex-shrink-0">
+          <button
+            onClick={() => onToggleRead(article.url)}
+            className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-md transition-all"
+            title={isRead ? "Mark as Unread" : "Mark as Read"}
+          >
+            {isRead ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button
+            onClick={copyToClipboard}
+            className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-md transition-all"
+            title="Copy Summary"
+          >
+            {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
