@@ -11,11 +11,11 @@ import os
 # Relative imports for Vercel
 try:
     from .models import SessionLocal, Article, engine
-    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek
+    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox
     from .summarizer import summarize_article
 except ImportError:
     from models import SessionLocal, Article, engine
-    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek
+    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox
     from summarizer import summarize_article
 
 # Simple SSE Publisher
@@ -66,6 +66,12 @@ async def fetch_and_summarize_logic(limit_ai: int = 5):
 
         await publisher.publish(json.dumps({"status_update": "Scraping SecurityWeek..."}))
         articles += await scrape_securityweek()
+
+        await publisher.publish(json.dumps({"status_update": "Scraping Dark Reading..."}))
+        articles += await scrape_darkreading()
+
+        await publisher.publish(json.dumps({"status_update": "Scraping ZeroFox..."}))
+        articles += await scrape_zerofox()
 
         # Auto-delete articles older than 7 days
         try:
