@@ -213,18 +213,19 @@ async def scrape_infosecurity():
 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = []
-            for item in soup.find_all('div', class_='news-item')[:10]:
-                title_tag = item.find('h3')
+            # Updated selector: webpage-item
+            for item in soup.find_all(['li', 'div'], class_='webpage-item')[:10]:
+                title_tag = item.find(['h2', 'h3'], class_='webpage-title')
                 if not title_tag: continue
                 link_tag = title_tag.find('a')
                 if not link_tag: continue
 
-                title = title_tag.text.strip()
+                title = link_tag.text.strip()
                 link = link_tag['href']
                 if link.startswith('/'):
                     link = f"https://www.infosecurity-magazine.com{link}"
 
-                summary_tag = item.find('p')
+                summary_tag = item.find(['p', 'div'], class_='webpage-summary')
                 summary = summary_tag.text.strip() if summary_tag else ""
 
                 articles.append({
@@ -240,7 +241,7 @@ async def scrape_infosecurity():
         return []
 
 async def scrape_cyberscoop():
-    url = "https://cyberscoop.com/news/"
+    url = "https://cyberscoop.com/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     }
@@ -253,17 +254,17 @@ async def scrape_cyberscoop():
 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = []
-            # CyberScoop uses article tags with specific classes
-            for item in soup.find_all('article', class_='post')[:10]:
-                title_tag = item.find('h2', class_='entry-title')
+            # Updated selector: post-item
+            for item in soup.find_all('article', class_='post-item')[:10]:
+                title_tag = item.find(['h2', 'h3'], class_='post-item__title')
                 if not title_tag: continue
                 link_tag = title_tag.find('a')
                 if not link_tag: continue
 
-                title = title_tag.text.strip()
+                title = link_tag.text.strip()
                 link = link_tag['href']
 
-                summary_tag = item.find('div', class_='entry-content') or item.find('p')
+                summary_tag = item.find('div', class_='post-item__excerpt') or item.find('p')
                 summary = summary_tag.text.strip() if summary_tag else ""
 
                 articles.append({
@@ -292,25 +293,19 @@ async def scrape_cisa():
 
             soup = BeautifulSoup(response.text, 'html.parser')
             articles = []
-            # CISA advisories feed
-            for item in soup.find_all('div', class_='views-row')[:10]:
-                title_tag = item.find('h3') or item.find('a')
+            # Updated selector: article.c-teaser
+            for item in soup.find_all('article', class_='c-teaser')[:10]:
+                title_tag = item.find('h3', class_='c-teaser__title')
                 if not title_tag: continue
+                link_tag = title_tag.find('a')
+                if not link_tag: continue
 
-                link = ""
-                if title_tag.name == 'a':
-                    link = title_tag['href']
-                    title = title_tag.text.strip()
-                else:
-                    link_tag = title_tag.find('a')
-                    if not link_tag: continue
-                    link = link_tag['href']
-                    title = title_tag.text.strip()
-
+                title = link_tag.text.strip()
+                link = link_tag['href']
                 if link.startswith('/'):
                     link = f"https://www.cisa.gov{link}"
 
-                summary_tag = item.find('div', class_='field--name-field-summary') or item.find('p')
+                summary_tag = item.find('div', class_='c-teaser__summary') or item.find('p')
                 summary = summary_tag.text.strip() if summary_tag else ""
 
                 articles.append({
