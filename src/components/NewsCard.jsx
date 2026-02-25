@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2 } from 'lucide-react';
+import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2, Shield } from 'lucide-react';
 
-const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
+const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = false }) => {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
 
@@ -67,6 +67,40 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
       return null;
     }
   };
+
+  if (compact) {
+    return (
+      <div className={`bg-slate-800/50 rounded-md p-3 border border-slate-700 hover:border-blue-500 transition-all flex items-center gap-4 group ${isRead ? 'opacity-40' : ''}`}>
+        <div className="flex-shrink-0 w-6 flex justify-center">
+          {getFavicon(article.url) ? (
+            <img src={getFavicon(article.url)} alt="" className="w-4 h-4 rounded-sm" onError={(e) => e.target.style.display = 'none'} />
+          ) : (
+            <Shield size={14} className="text-slate-600" />
+          )}
+        </div>
+
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${getCategoryColor(article.category)}`}>
+              {article.category || 'General'}
+            </span>
+            <h3 className={`text-sm font-bold truncate ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 flex items-center gap-4 text-[10px] text-slate-500 font-mono">
+          <span className="hidden md:inline bg-slate-700/50 px-2 py-0.5 rounded">{article.source}</span>
+          <span className="w-16 text-right">{formatDate(article.published_at)}</span>
+        </div>
+
+        <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onToggleRead(article.url)} className="p-1.5 text-slate-400 hover:text-blue-400" title="Mark Read"><Eye size={14} /></button>
+          <button onClick={shareIntel} className="p-1.5 text-slate-400 hover:text-blue-400" title="Share"><Share2 size={14} /></button>
+          <a href={article.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-400" title="Source"><ExternalLink size={14} /></a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`bg-slate-800 rounded-lg p-6 shadow-lg border transition-all flex flex-col relative group

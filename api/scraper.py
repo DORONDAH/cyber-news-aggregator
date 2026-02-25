@@ -2,371 +2,81 @@ import httpx
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 import logging
+import feedparser
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def scrape_bleepingcomputer():
-    url = "https://www.bleepingcomputer.com/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Cache-Control": "max-age=0",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch BleepingComputer: {response.status_code}")
-                return []
+def parse_rss_date(struct_time):
+    if not struct_time:
+        return datetime.now(timezone.utc)
+    return datetime.fromtimestamp(time.mktime(struct_time), tz=timezone.utc)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            for item in soup.find_all('div', class_='bc_latest_news_text'):
-                title_tag = item.find('h4')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-                if link.startswith('/'):
-                    link = f"https://www.bleepingcomputer.com{link}"
-                summary_tag = item.find('p')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'BleepingComputer',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping BleepingComputer: {str(e)}")
-        return []
-
-async def scrape_thehackernews():
-    url = "https://thehackernews.com/"
+async def scrape_rss(url, source_name, limit=10):
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(url)
             if response.status_code != 200:
-                logger.error(f"Failed to fetch TheHackerNews: {response.status_code}")
+                logger.error(f"Failed to fetch RSS for {source_name}: {response.status_code}")
                 return []
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            feed = feedparser.parse(response.text)
             articles = []
-            for item in soup.find_all('div', class_='body-post'):
-                title_tag = item.find('h2', class_='home-title')
-                title = title_tag.text.strip()
-                link = item.find('a', class_='story-link')['href']
-                summary_tag = item.find('div', class_='home-desc')
-                summary = summary_tag.text.strip() if summary_tag else ""
+
+            for entry in feed.entries[:limit]:
+                # Extract summary from summary or content
+                content = entry.get('summary', '')
+                if not content and 'content' in entry:
+                    content = entry.content[0].value
+
+                # Clean HTML if present in content
+                soup = BeautifulSoup(content, 'html.parser')
+                clean_content = soup.get_text(separator=' ').strip()
 
                 articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'TheHackerNews',
-                    'published_at': datetime.now(timezone.utc)
+                    'title': entry.get('title', 'No Title'),
+                    'url': entry.get('link', ''),
+                    'content': clean_content[:2000], # Cap for AI processing
+                    'source': source_name,
+                    'published_at': parse_rss_date(entry.get('published_parsed'))
                 })
             return articles
     except Exception as e:
-        logger.error(f"Error scraping TheHackerNews: {str(e)}")
+        logger.error(f"Error scraping RSS {source_name}: {str(e)}")
         return []
+
+async def scrape_bleepingcomputer():
+    return await scrape_rss("https://www.bleepingcomputer.com/feed/", "BleepingComputer")
+
+async def scrape_thehackernews():
+    return await scrape_rss("https://thehackernews.com/feeds/posts/default", "TheHackerNews")
 
 async def scrape_securityweek():
-    url = "https://www.securityweek.com/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch SecurityWeek: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # Look for article items on the homepage
-            for item in soup.find_all('div', class_='article-content'):
-                title_tag = item.find('h2') or item.find('h3')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-                if link.startswith('/'):
-                    link = f"https://www.securityweek.com{link}"
-                summary_tag = item.find('div', class_='entry-content') or item.find('p')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'SecurityWeek',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping SecurityWeek: {str(e)}")
-        return []
+    return await scrape_rss("https://feeds.feedburner.com/securityweek", "SecurityWeek")
 
 async def scrape_darkreading():
-    url = "https://www.darkreading.com/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch Dark Reading: {response.status_code}")
-                return []
+    return await scrape_rss("https://www.darkreading.com/rss.xml", "Dark Reading")
 
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # Dark Reading uses 'article' tags or specific classes for news items
-            for item in soup.find_all('div', class_='featured-item')[:10]:
-                title_tag = item.find('a', class_='featured-item-title')
-                if not title_tag: continue
+async def scrape_unit42():
+    return await scrape_rss("https://unit42.paloaltonetworks.com/feed/", "Unit 42")
 
-                title = title_tag.text.strip()
-                link = title_tag['href']
-                if link.startswith('/'):
-                    link = f"https://www.darkreading.com{link}"
-
-                summary_tag = item.find('div', class_='featured-item-description')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'Dark Reading',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping Dark Reading: {str(e)}")
-        return []
+async def scrape_mandiant():
+    # Mandiant uses a slightly different structure often, but RSS is standard
+    return await scrape_rss("https://www.mandiant.com/resources/blog/rss.xml", "Mandiant")
 
 async def scrape_zerofox():
-    url = "https://www.zerofox.com/blog/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch ZeroFox: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # ZeroFox blog layout
-            for item in soup.find_all('div', class_='post-item')[:10]:
-                title_tag = item.find('h3')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-
-                summary_tag = item.find('div', class_='post-content') or item.find('p')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'ZeroFox',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping ZeroFox: {str(e)}")
-        return []
+    return await scrape_rss("https://www.zerofox.com/feed/", "ZeroFox")
 
 async def scrape_infosecurity():
-    url = "https://www.infosecurity-magazine.com/news/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch Infosecurity: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # Updated selector: webpage-item
-            for item in soup.find_all(['li', 'div'], class_='webpage-item')[:10]:
-                title_tag = item.find(['h2', 'h3'], class_='webpage-title')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-                if link.startswith('/'):
-                    link = f"https://www.infosecurity-magazine.com{link}"
-
-                summary_tag = item.find(['p', 'div'], class_='webpage-summary')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'Infosecurity Mag',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping Infosecurity: {str(e)}")
-        return []
+    return await scrape_rss("https://www.infosecurity-magazine.com/rss/news/", "Infosecurity Mag")
 
 async def scrape_cisa():
-    url = "https://www.cisa.gov/news-events/cybersecurity-advisories"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch CISA: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # Updated selector: article.c-teaser
-            for item in soup.find_all('article', class_='c-teaser')[:10]:
-                title_tag = item.find('h3', class_='c-teaser__title')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-                if link.startswith('/'):
-                    link = f"https://www.cisa.gov{link}"
-
-                summary_tag = item.find('div', class_='c-teaser__summary') or item.find('p')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'CISA',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping CISA: {str(e)}")
-        return []
+    # CISA RSS for cybersecurity advisories
+    return await scrape_rss("https://www.cisa.gov/cybersecurity-advisories.xml", "CISA")
 
 async def scrape_cybernews():
-    url = "https://cybernews.com/news/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch Cybernews: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-
-            # Find the main container of news items
-            # Based on the curl inspection, items are in cells__item divs
-            for item in soup.find_all('div', class_='cells__item_width'):
-                title_tag = item.find('h3', class_='heading_size_4')
-                if not title_tag: continue
-
-                link_tag = title_tag.find_parent('a') or item.find('a', class_='link')
-                if not link_tag: continue
-
-                title = title_tag.text.strip()
-                link = link_tag['href']
-                if link.startswith('/'):
-                    link = f"https://cybernews.com{link}"
-
-                summary_tag = item.find('div', class_='text_size_small text_line-height_big')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'Cybernews',
-                    'published_at': datetime.now(timezone.utc)
-                })
-
-                if len(articles) >= 10: break
-
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping Cybernews: {str(e)}")
-        return []
+    return await scrape_rss("https://cybernews.com/news/feed/", "Cybernews")
 
 async def scrape_therecord():
-    url = "https://therecord.media/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch The Record: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-
-            # Target the latest news section
-            latest_section = soup.find('div', class_='latest-articles__list')
-            if latest_section:
-                for item in latest_section.find_all('a', recursive=False):
-                    title_tag = item.find('h2')
-                    if not title_tag: continue
-
-                    title = title_tag.text.strip()
-                    link = item['href']
-                    if link.startswith('/'):
-                        link = f"https://therecord.media{link}"
-
-                    # Content is usually not on the homepage, but we can grab the first few sentences if present
-                    articles.append({
-                        'title': title,
-                        'url': link,
-                        'content': title, # Use title as fallback for content to guide AI
-                        'source': 'The Record',
-                        'published_at': datetime.now(timezone.utc)
-                    })
-
-                    if len(articles) >= 10: break
-
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping The Record: {str(e)}")
-        return []
+    return await scrape_rss("https://therecord.media/feed/", "The Record")

@@ -11,11 +11,21 @@ import os
 # Relative imports for Vercel
 try:
     from .models import SessionLocal, Article, engine
-    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa, scrape_cybernews, scrape_therecord
+    from .scraper import (
+        scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek,
+        scrape_darkreading, scrape_zerofox, scrape_infosecurity,
+        scrape_cisa, scrape_cybernews, scrape_therecord,
+        scrape_unit42, scrape_mandiant
+    )
     from .summarizer import summarize_article
 except ImportError:
     from models import SessionLocal, Article, engine
-    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa, scrape_cybernews, scrape_therecord
+    from scraper import (
+        scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek,
+        scrape_darkreading, scrape_zerofox, scrape_infosecurity,
+        scrape_cisa, scrape_cybernews, scrape_therecord,
+        scrape_unit42, scrape_mandiant
+    )
     from summarizer import summarize_article
 
 # Simple SSE Publisher
@@ -85,6 +95,12 @@ async def fetch_and_summarize_logic(limit_ai: int = 5):
         await publisher.publish(json.dumps({"status_update": "Scraping The Record..."}))
         articles += await scrape_therecord()
 
+        await publisher.publish(json.dumps({"status_update": "Scraping Unit 42..."}))
+        articles += await scrape_unit42()
+
+        await publisher.publish(json.dumps({"status_update": "Scraping Mandiant..."}))
+        articles += await scrape_mandiant()
+
         # Auto-delete articles older than 7 days
         try:
             old_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
@@ -107,6 +123,8 @@ async def fetch_and_summarize_logic(limit_ai: int = 5):
                     category="General",
                     published_at=art_data['published_at']
                 )
+                # Ensure created_at matches published_at for accurate interleaving if needed
+                new_art.created_at = art_data['published_at']
                 db.add(new_art)
                 new_count += 1
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download, Zap } from 'lucide-react';
+import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download, Zap, List, Grid } from 'lucide-react';
 import NewsCard from './components/NewsCard';
 
 function App() {
@@ -8,6 +8,7 @@ function App() {
   const [view, setView] = useState('dashboard'); // 'dashboard' or 'history'
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'compact'
   const [statusMessage, setStatusMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSource, setSelectedSource] = useState('All');
@@ -369,6 +370,23 @@ function App() {
               </button>
             </nav>
 
+            <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700 ml-2">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-slate-700 text-blue-400' : 'text-slate-500 hover:bg-slate-800'}`}
+                title="Card View"
+              >
+                <Grid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('compact')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'compact' ? 'bg-slate-700 text-blue-400' : 'text-slate-500 hover:bg-slate-800'}`}
+                title="Compact List View"
+              >
+                <List size={18} />
+              </button>
+            </div>
+
             <button
               onClick={refreshNews}
               className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
@@ -523,13 +541,14 @@ function App() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={viewMode === 'compact' ? "flex flex-col gap-2" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
             {finalFilteredItems.map((article) => (
               <NewsCard
                 key={article.id}
                 article={article}
                 isRead={readArticles.includes(article.url)}
                 onToggleRead={toggleRead}
+                compact={viewMode === 'compact'}
               />
             ))}
 
