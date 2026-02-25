@@ -327,3 +327,46 @@ async def scrape_cybernews():
     except Exception as e:
         logger.error(f"Error scraping Cybernews: {str(e)}")
         return []
+
+async def scrape_therecord():
+    url = "https://therecord.media/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch The Record: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+
+            # Target the latest news section
+            latest_section = soup.find('div', class_='latest-articles__list')
+            if latest_section:
+                for item in latest_section.find_all('a', recursive=False):
+                    title_tag = item.find('h2')
+                    if not title_tag: continue
+
+                    title = title_tag.text.strip()
+                    link = item['href']
+                    if link.startswith('/'):
+                        link = f"https://therecord.media{link}"
+
+                    # Content is usually not on the homepage, but we can grab the first few sentences if present
+                    articles.append({
+                        'title': title,
+                        'url': link,
+                        'content': title, # Use title as fallback for content to guide AI
+                        'source': 'The Record',
+                        'published_at': datetime.now(timezone.utc)
+                    })
+
+                    if len(articles) >= 10: break
+
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping The Record: {str(e)}")
+        return []

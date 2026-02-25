@@ -35,13 +35,21 @@ async def summarize_article(content: str):
 {content}
 
 Tasks:
-1. Select the most appropriate category from this list: Ransomware, Vulnerability, Data Breach, Malware, Policy/Legal, General.
-2. Summarize the article into 3 key bullet points in non-technical language.
+1. Select the most appropriate category from this EXACT list: Ransomware, Vulnerability, Data Breach, Malware, Policy/Legal, General.
+   - Use 'Ransomware' for any extortion/lock-up attacks.
+   - Use 'Vulnerability' for bugs, CVEs, and zero-days.
+   - Use 'Data Breach' for leaks and stolen info.
+   - Use 'Malware' for viruses, trojans, and botnets.
+   - Use 'Policy/Legal' for laws, arrests, and government regulations.
+   - Use 'General' only if none of the above fit.
+2. Summarize the article into exactly 3 punchy bullet points. Focus on impact and technical details.
 
 Output format:
-CATEGORY: [Selected Category]
+CATEGORY: [Exact Category Name]
 SUMMARY:
-[3 Bullet Points]"""
+• [Point 1]
+• [Point 2]
+• [Point 3]"""
 
         print(f"DEBUG: Calling Gemini API for summary and category...")
         response = model.generate_content(prompt)

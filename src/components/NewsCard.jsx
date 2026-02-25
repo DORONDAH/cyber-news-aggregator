@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ExternalLink, Clock, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2 } from 'lucide-react';
 
 const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown date';
@@ -22,6 +23,28 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
     navigator.clipboard.writeText(`${article.title}\n\n${article.summary}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareIntel = async () => {
+    const text = `🚨 CYBER INTEL BRIEF: ${article.title}\n\n${article.summary}\n\nSource: ${article.source}\nLink: ${article.url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: article.title,
+          text: text,
+          url: article.url,
+        });
+        setShared(true);
+        setTimeout(() => setShared(false), 2000);
+      } catch (e) {
+        copyToClipboard();
+      }
+    } else {
+      copyToClipboard();
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    }
   };
 
   const getCategoryColor = (cat) => {
@@ -83,6 +106,13 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
           >
             {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
           </button>
+          <button
+            onClick={shareIntel}
+            className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-md transition-all"
+            title="Share Intel"
+          >
+            {shared ? <Check size={16} className="text-green-500" /> : <Share2 size={16} />}
+          </button>
         </div>
       </div>
 
@@ -127,8 +157,13 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
       </div>
 
       {copied && (
-        <div className="absolute top-2 right-12 bg-green-900/80 text-green-400 px-2 py-1 rounded text-[10px] animate-fade-in">
-          Copied to clipboard!
+        <div className="absolute top-2 right-12 bg-green-900/80 text-green-400 px-2 py-1 rounded text-[10px] animate-fade-in z-30">
+          Copied Brief!
+        </div>
+      )}
+      {shared && !copied && (
+        <div className="absolute top-2 right-12 bg-green-900/80 text-green-400 px-2 py-1 rounded text-[10px] animate-fade-in z-30">
+          Intel Shared!
         </div>
       )}
     </div>
