@@ -186,16 +186,46 @@ function App() {
   };
 
   const summarizeMore = async () => {
+    const pending = (view === 'dashboard' ? news : history)
+      .filter(art => !art.summary)
+      .slice(0, 5);
+
+    if (pending.length === 0) return;
+
     setLoading(true);
-    setStatusMessage('Requesting 5 more summaries...');
-    try {
-      await fetch(`${API_BASE}/api/summarize-more`, { method: 'POST' });
-    } catch (err) {
-      console.error('Failed to summarize more', err);
-      setStatusMessage('Request failed');
-      setLoading(false);
-      setTimeout(() => setStatusMessage(''), 3000);
+    const total = pending.length;
+
+    for (let i = 0; i < total; i++) {
+      const article = pending[i];
+      setStatusMessage(`AI Summarizing ${i + 1}/${total}...`);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/summarize-single`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: article.id })
+        });
+
+        if (res.ok) {
+          const updatedArt = await res.json();
+          // Update local state immediately
+          setNews(prev => prev.map(a => a.id === updatedArt.id ? { ...a, ...updatedArt } : a));
+          setHistory(prev => prev.map(a => a.id === updatedArt.id ? { ...a, ...updatedArt } : a));
+        }
+      } catch (err) {
+        console.error('Failed to summarize article', err);
+      }
+
+      // 12s delay between items to respect Gemini 5 RPM limit
+      if (i < total - 1) {
+        setStatusMessage(`AI Done. Cooldown: ${i + 1}/${total} (Waiting 12s...)`);
+        await new Promise(resolve => setTimeout(resolve, 12000));
+      }
     }
+
+    setLoading(false);
+    setStatusMessage('Batch complete!');
+    setTimeout(() => setStatusMessage(''), 3000);
   };
 
   useEffect(() => {

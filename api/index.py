@@ -169,10 +169,51 @@ async def summarize_batch_logic(limit: int = 5):
     finally:
         db.close()
 
-@app.post("/api/summarize-more")
-async def summarize_more(background_tasks: BackgroundTasks):
-    background_tasks.add_task(summarize_batch_logic, limit=5)
-    return {"status": "batch started"}
+@app.post("/api/summarize-single")
+async def summarize_single(request: Request, db: Session = Depends(get_db)):
+    data = await request.json()
+    article_id = data.get("id")
+
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        return {"error": "Article not found"}
+
+    if article.summary:
+        return {"status": "already summarized", "article": article}
+
+    raw_ai_output = await summarize_article(article.content)
+
+    # Parse CATEGORY and SUMMARY
+    category = "General"
+    summary = raw_ai_output
+    if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
+        try:
+            parts = raw_ai_output.split("SUMMARY:")
+            category = parts[0].replace("CATEGORY:", "").strip()
+            summary = parts[1].strip()
+        except: pass
+
+    article.summary = summary
+    article.category = category
+    db.commit()
+
+    # Refresh object to get updated fields
+    db.refresh(article)
+
+    summary_json = {
+        "id": article.id,
+        "title": article.title,
+        "url": article.url,
+        "summary": article.summary,
+        "source": article.source,
+        "category": article.category,
+        "published_at": article.published_at.isoformat()
+    }
+
+    # Still publish to SSE for any other open tabs
+    await publisher.publish(json.dumps(summary_json))
+
+    return summary_json
 
 @app.get("/api/news")
 def get_news(db: Session = Depends(get_db)):
