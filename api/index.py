@@ -11,11 +11,11 @@ import os
 # Relative imports for Vercel
 try:
     from .models import SessionLocal, Article, engine
-    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa
+    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa, scrape_cybernews
     from .summarizer import summarize_article
 except ImportError:
     from models import SessionLocal, Article, engine
-    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa
+    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa, scrape_cybernews
     from summarizer import summarize_article
 
 # Simple SSE Publisher
@@ -78,6 +78,9 @@ async def fetch_and_summarize_logic(limit_ai: int = 5):
 
         await publisher.publish(json.dumps({"status_update": "Scraping CISA..."}))
         articles += await scrape_cisa()
+
+        await publisher.publish(json.dumps({"status_update": "Scraping Cybernews..."}))
+        articles += await scrape_cybernews()
 
         # Auto-delete articles older than 7 days
         try:
@@ -219,7 +222,30 @@ async def summarize_single(request: Request, db: Session = Depends(get_db)):
 def get_news(db: Session = Depends(get_db)):
     # Filter for articles created since midnight UTC today
     today_midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    return db.query(Article).filter(Article.created_at >= today_midnight).order_by(Article.created_at.desc()).all()
+    articles = db.query(Article).filter(Article.created_at >= today_midnight).order_by(Article.created_at.desc()).all()
+
+    if not articles:
+        return []
+
+    # Implement Round-Robin Interleaving by Source
+    # Group articles by source
+    by_source = {}
+    for art in articles:
+        if art.source not in by_source:
+            by_source[art.source] = []
+        by_source[art.source].append(art)
+
+    # Round-robin interleaving
+    source_names = sorted(by_source.keys()) # Consistent order
+    interleaved = []
+    max_len = max(len(v) for v in by_source.values())
+
+    for i in range(max_len):
+        for source in source_names:
+            if i < len(by_source[source]):
+                interleaved.append(by_source[source][i])
+
+    return interleaved
 
 @app.get("/api/history")
 def get_history(db: Session = Depends(get_db)):

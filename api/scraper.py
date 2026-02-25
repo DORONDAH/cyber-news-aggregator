@@ -280,3 +280,50 @@ async def scrape_cisa():
     except Exception as e:
         logger.error(f"Error scraping CISA: {str(e)}")
         return []
+
+async def scrape_cybernews():
+    url = "https://cybernews.com/news/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch Cybernews: {response.status_code}")
+                return []
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = []
+
+            # Find the main container of news items
+            # Based on the curl inspection, items are in cells__item divs
+            for item in soup.find_all('div', class_='cells__item_width'):
+                title_tag = item.find('h3', class_='heading_size_4')
+                if not title_tag: continue
+
+                link_tag = title_tag.find_parent('a') or item.find('a', class_='link')
+                if not link_tag: continue
+
+                title = title_tag.text.strip()
+                link = link_tag['href']
+                if link.startswith('/'):
+                    link = f"https://cybernews.com{link}"
+
+                summary_tag = item.find('div', class_='text_size_small text_line-height_big')
+                summary = summary_tag.text.strip() if summary_tag else ""
+
+                articles.append({
+                    'title': title,
+                    'url': link,
+                    'content': summary,
+                    'source': 'Cybernews',
+                    'published_at': datetime.now(timezone.utc)
+                })
+
+                if len(articles) >= 10: break
+
+            return articles
+    except Exception as e:
+        logger.error(f"Error scraping Cybernews: {str(e)}")
+        return []
