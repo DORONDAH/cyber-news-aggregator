@@ -138,8 +138,10 @@ function App() {
       const data = await res.json();
       setNews(data);
 
-      // If no news is found (e.g. after a DB reset), trigger a refresh automatically
-      if (data.length === 0 && view === 'dashboard') {
+      // SMART WARMUP: If database is empty (common on Vercel cold starts),
+      // trigger an automatic refresh so the user gets content immediately.
+      if (data.length === 0 && view === 'dashboard' && !loading) {
+        console.log("Feed empty, triggering auto-warmup...");
         refreshNews();
       }
     } catch (err) {
@@ -509,6 +511,8 @@ function App() {
                       isRead={readArticles.includes(story.url)}
                       onToggleRead={toggleRead}
                       isHyped={true}
+                      onFilterSource={setSelectedSource}
+                      onFilterCategory={setSelectedCategory}
                     />
                   </div>
                   {/* Multi-source indicator badges */}
@@ -549,6 +553,8 @@ function App() {
                 isRead={readArticles.includes(article.url)}
                 onToggleRead={toggleRead}
                 compact={viewMode === 'compact'}
+                onFilterSource={setSelectedSource}
+                onFilterCategory={setSelectedCategory}
               />
             ))}
 

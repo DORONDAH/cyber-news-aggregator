@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import asyncio
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from sse_starlette.sse import EventSourceResponse
 from typing import List
@@ -47,6 +48,9 @@ class Publisher:
             await queue.put(msg)
 
 publisher = Publisher()
+
+# Simple rate limiting for resource-intensive tasks
+last_refresh_time = 0
 
 app = FastAPI()
 
@@ -158,18 +162,29 @@ async def summarize_batch_logic(limit: int = 5):
             await publisher.publish(json.dumps({"status_update": f"AI Summarizing {i+1}/{total}..."}))
             raw_ai_output = await summarize_article(article.content)
 
-            # Parse CATEGORY and SUMMARY
+            # Parse CATEGORY, SEVERITY and SUMMARY
             category = "General"
+            severity = "Medium"
             summary = raw_ai_output
+
             if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
                 try:
                     parts = raw_ai_output.split("SUMMARY:")
-                    category = parts[0].replace("CATEGORY:", "").strip()
+                    header_part = parts[0]
                     summary = parts[1].strip()
+
+                    if "CATEGORY:" in header_part:
+                        cat_line = [l for l in header_part.split('\n') if "CATEGORY:" in l][0]
+                        category = cat_line.replace("CATEGORY:", "").strip()
+
+                    if "SEVERITY:" in header_part:
+                        sev_line = [l for l in header_part.split('\n') if "SEVERITY:" in l][0]
+                        severity = sev_line.replace("SEVERITY:", "").strip()
                 except: pass
 
             article.summary = summary
             article.category = category
+            # We don't have a severity column in DB yet, but we'll include it in the JSON
             db.commit()
 
             # Push update to UI
@@ -180,6 +195,7 @@ async def summarize_batch_logic(limit: int = 5):
                 "summary": article.summary,
                 "source": article.source,
                 "category": article.category,
+                "severity": severity,
                 "published_at": article.published_at.isoformat()
             }
             await publisher.publish(json.dumps(summary_json))
@@ -207,14 +223,24 @@ async def summarize_single(request: Request, db: Session = Depends(get_db)):
 
     raw_ai_output = await summarize_article(article.content)
 
-    # Parse CATEGORY and SUMMARY
+    # Parse CATEGORY, SEVERITY and SUMMARY
     category = "General"
+    severity = "Medium"
     summary = raw_ai_output
+
     if "CATEGORY:" in raw_ai_output and "SUMMARY:" in raw_ai_output:
         try:
             parts = raw_ai_output.split("SUMMARY:")
-            category = parts[0].replace("CATEGORY:", "").strip()
+            header_part = parts[0]
             summary = parts[1].strip()
+
+            if "CATEGORY:" in header_part:
+                cat_line = [l for l in header_part.split('\n') if "CATEGORY:" in l][0]
+                category = cat_line.replace("CATEGORY:", "").strip()
+
+            if "SEVERITY:" in header_part:
+                sev_line = [l for l in header_part.split('\n') if "SEVERITY:" in l][0]
+                severity = sev_line.replace("SEVERITY:", "").strip()
         except: pass
 
     article.summary = summary
@@ -231,6 +257,7 @@ async def summarize_single(request: Request, db: Session = Depends(get_db)):
         "summary": article.summary,
         "source": article.source,
         "category": article.category,
+        "severity": severity,
         "published_at": article.published_at.isoformat()
     }
 
@@ -286,6 +313,14 @@ async def cron_trigger(background_tasks: BackgroundTasks):
 
 @app.post("/api/refresh")
 async def trigger_refresh(background_tasks: BackgroundTasks):
+    global last_refresh_time
+    now = time.time()
+
+    # Prevent refreshes more than once every 5 minutes to save quota
+    if now - last_refresh_time < 300:
+        return {"status": "cooling down", "seconds_left": int(300 - (now - last_refresh_time))}
+
+    last_refresh_time = now
     background_tasks.add_task(fetch_and_summarize_logic)
     return {"status": "refresh started"}
 

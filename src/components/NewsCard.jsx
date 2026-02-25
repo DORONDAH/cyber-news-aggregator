@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
 import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2, Shield } from 'lucide-react';
 
-const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = false }) => {
+const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = false, onFilterSource, onFilterCategory }) => {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+
+  const getSeverityColor = (sev) => {
+    const colors = {
+      'Critical': 'bg-red-600 text-white border-red-700',
+      'High': 'bg-orange-600 text-white border-orange-700',
+      'Medium': 'bg-yellow-600 text-black border-yellow-700',
+      'Low': 'bg-blue-600 text-white border-blue-700'
+    };
+    return colors[sev] || 'bg-slate-600 text-white border-slate-700';
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown date';
@@ -72,24 +82,37 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
     return (
       <div className={`bg-slate-800/50 rounded-md p-3 border border-slate-700 hover:border-blue-500 transition-all flex items-center gap-4 group ${isRead ? 'opacity-40' : ''}`}>
         <div className="flex-shrink-0 w-6 flex justify-center">
-          {getFavicon(article.url) ? (
-            <img src={getFavicon(article.url)} alt="" className="w-4 h-4 rounded-sm" onError={(e) => e.target.style.display = 'none'} />
-          ) : (
-            <Shield size={14} className="text-slate-600" />
+          {article.severity && (
+            <div className={`w-2 h-2 rounded-full ${article.severity === 'Critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : article.severity === 'High' ? 'bg-orange-500' : article.severity === 'Medium' ? 'bg-yellow-500' : 'bg-blue-500'}`} title={`Severity: ${article.severity}`}></div>
+          )}
+          {!article.severity && (
+            getFavicon(article.url) ? (
+              <img src={getFavicon(article.url)} alt="" className="w-4 h-4 rounded-sm" onError={(e) => e.target.style.display = 'none'} />
+            ) : (
+              <Shield size={14} className="text-slate-600" />
+            )
           )}
         </div>
 
         <div className="flex-grow min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${getCategoryColor(article.category)}`}>
+            <button
+              onClick={() => onFilterCategory?.(article.category || 'General')}
+              className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border flex-shrink-0 transition-colors hover:brightness-125 ${getCategoryColor(article.category)}`}
+            >
               {article.category || 'General'}
-            </span>
+            </button>
             <h3 className={`text-sm font-bold truncate ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
           </div>
         </div>
 
         <div className="flex-shrink-0 flex items-center gap-4 text-[10px] text-slate-500 font-mono">
-          <span className="hidden md:inline bg-slate-700/50 px-2 py-0.5 rounded">{article.source}</span>
+          <button
+            onClick={() => onFilterSource?.(article.source)}
+            className="hidden md:inline bg-slate-700/50 px-2 py-0.5 rounded hover:bg-slate-600 transition-colors"
+          >
+            {article.source}
+          </button>
           <span className="w-16 text-right">{formatDate(article.published_at)}</span>
         </div>
 
@@ -150,10 +173,18 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
         </div>
       </div>
 
-      <div className="mb-4">
-        <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${getCategoryColor(article.category)}`}>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => onFilterCategory?.(article.category || 'General')}
+          className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border transition-colors hover:brightness-125 ${getCategoryColor(article.category)}`}
+        >
           {article.category || 'General'}
-        </span>
+        </button>
+        {article.severity && (
+          <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border shadow-sm ${getSeverityColor(article.severity)}`}>
+            {article.severity}
+          </span>
+        )}
       </div>
 
       <div className="text-slate-300 mb-6 whitespace-pre-line text-sm flex-grow">
@@ -171,9 +202,12 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
 
       <div className="flex justify-between items-center text-xs text-slate-500 mt-auto border-t border-slate-700/50 pt-4">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-mono bg-slate-700/50 self-start px-2 py-0.5 rounded text-slate-400 mb-1">
+          <button
+            onClick={() => onFilterSource?.(article.source)}
+            className="text-[10px] font-mono bg-slate-700/50 self-start px-2 py-0.5 rounded text-slate-400 mb-1 hover:bg-slate-600 transition-colors"
+          >
             {article.source}
-          </span>
+          </button>
           <div className="flex items-center gap-1">
             <Clock size={12} />
             <span>{formatDate(article.published_at)}</span>

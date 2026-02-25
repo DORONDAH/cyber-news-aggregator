@@ -42,10 +42,16 @@ Tasks:
    - Use 'Malware' for viruses, trojans, and botnets.
    - Use 'Policy/Legal' for laws, arrests, and government regulations.
    - Use 'General' only if none of the above fit.
-2. Summarize the article into exactly 3 punchy bullet points. Focus on impact and technical details.
+2. Assign a SEVERITY level from this EXACT list: Low, Medium, High, Critical.
+   - Critical: Active wide-scale exploits, major infrastructure hits.
+   - High: Confirmed breaches of large orgs, new zero-days.
+   - Medium: General malware news, patched vulnerabilities.
+   - Low: Policy news, minor updates.
+3. Summarize the article into exactly 3 punchy bullet points. Focus on impact and technical details.
 
 Output format:
 CATEGORY: [Exact Category Name]
+SEVERITY: [Exact Severity Level]
 SUMMARY:
 • [Point 1]
 • [Point 2]
