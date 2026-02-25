@@ -439,30 +439,34 @@ function App() {
           </div>
         </div>
 
-        {/* Top Stories / Trending Section */}
+        {/* Hyped Cyber Attacks / Trending Section */}
         {view === 'dashboard' && topStories.length > 0 && !searchQuery && selectedSource === 'All' && selectedCategory === 'All' && (
           <div className="mb-12">
-            <div className="flex items-center gap-2 mb-6 text-orange-500">
-              <Zap size={20} fill="currentColor" />
-              <h2 className="text-xl font-bold tracking-tight uppercase">Trending Now</h2>
-              <span className="text-xs font-medium px-2 py-0.5 bg-orange-900/30 border border-orange-500/30 rounded-full ml-2">
-                Multiple Sources
+            <div className="flex items-center gap-2 mb-6 text-red-500">
+              <div className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-bold animate-pulse uppercase tracking-tighter">Breaking</div>
+              <Zap size={20} fill="currentColor" className="animate-bounce" />
+              <h2 className="text-xl font-black tracking-tighter uppercase italic">Hyped Cyber Attacks</h2>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-red-900/30 border border-red-500/30 rounded-full ml-2 text-red-400">
+                HIGH SIGNAL / MULTI-SOURCE
               </span>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {topStories.map((story) => (
                 <div key={story.id} className="relative group">
-                  {/* Highlight Border Effect */}
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
-                  <NewsCard
-                    article={story}
-                    isRead={readArticles.includes(story.url)}
-                    onToggleRead={toggleRead}
-                  />
+                  {/* Aggressive Highlight Border Effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-red-600 via-orange-500 to-red-600 rounded-xl blur-md opacity-25 group-hover:opacity-60 transition duration-500 group-hover:duration-200 animate-gradient-x"></div>
+                  <div className="relative">
+                    <NewsCard
+                      article={story}
+                      isRead={readArticles.includes(story.url)}
+                      onToggleRead={toggleRead}
+                      isHyped={true}
+                    />
+                  </div>
                   {/* Multi-source indicator badges */}
-                  <div className="absolute top-2 left-12 flex gap-1">
+                  <div className="absolute -top-3 -left-2 flex gap-1 z-10">
                     {story.allSources.map(src => (
-                      <span key={src} className="text-[8px] bg-slate-900/90 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50 shadow-sm">
+                      <span key={src} className="text-[9px] font-bold bg-red-600 text-white px-2 py-0.5 rounded shadow-xl border border-red-400/50">
                         {src}
                       </span>
                     ))}
@@ -470,14 +474,15 @@ function App() {
                 </div>
               ))}
             </div>
-            <div className="mt-12 border-b border-slate-800"></div>
+            <div className="mt-12 border-b border-slate-800/50"></div>
           </div>
         )}
 
         {/* Regular News Grid */}
         <div className="flex items-center gap-2 mb-6">
-          <h2 className="text-lg font-semibold text-slate-400 uppercase tracking-wider">
-            {view === 'dashboard' ? 'Recent Feed' : '7-Day History'}
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <h2 className="text-lg font-bold text-slate-300 uppercase tracking-tighter">
+            {view === 'dashboard' ? "Today's Live Intel" : 'Historical Archive'}
           </h2>
         </div>
 

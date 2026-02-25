@@ -11,11 +11,11 @@ import os
 # Relative imports for Vercel
 try:
     from .models import SessionLocal, Article, engine
-    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cyberscoop, scrape_cisa
+    from .scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa
     from .summarizer import summarize_article
 except ImportError:
     from models import SessionLocal, Article, engine
-    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cyberscoop, scrape_cisa
+    from scraper import scrape_bleepingcomputer, scrape_thehackernews, scrape_securityweek, scrape_darkreading, scrape_zerofox, scrape_infosecurity, scrape_cisa
     from summarizer import summarize_article
 
 # Simple SSE Publisher
@@ -75,9 +75,6 @@ async def fetch_and_summarize_logic(limit_ai: int = 5):
 
         await publisher.publish(json.dumps({"status_update": "Scraping Infosecurity..."}))
         articles += await scrape_infosecurity()
-
-        await publisher.publish(json.dumps({"status_update": "Scraping CyberScoop..."}))
-        articles += await scrape_cyberscoop()
 
         await publisher.publish(json.dumps({"status_update": "Scraping CISA..."}))
         articles += await scrape_cisa()
@@ -173,14 +170,15 @@ async def summarize_batch_logic(limit: int = 5):
         db.close()
 
 @app.post("/api/summarize-more")
-async def summarize_more():
-    await summarize_batch_logic(limit=5)
-    return {"status": "batch completed"}
+async def summarize_more(background_tasks: BackgroundTasks):
+    background_tasks.add_task(summarize_batch_logic, limit=5)
+    return {"status": "batch started"}
 
 @app.get("/api/news")
 def get_news(db: Session = Depends(get_db)):
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    return db.query(Article).filter(Article.created_at >= cutoff).order_by(Article.created_at.desc()).all()
+    # Filter for articles created since midnight UTC today
+    today_midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return db.query(Article).filter(Article.created_at >= today_midnight).order_by(Article.created_at.desc()).all()
 
 @app.get("/api/history")
 def get_history(db: Session = Depends(get_db)):
@@ -193,15 +191,15 @@ def clear_history(db: Session = Depends(get_db)):
     return {"status": "success"}
 
 @app.get("/api/cron")
-async def cron_trigger():
+async def cron_trigger(background_tasks: BackgroundTasks):
     """Endpoint to be triggered by Vercel Cron"""
-    await fetch_and_summarize_logic()
-    return {"status": "scraping completed"}
+    background_tasks.add_task(fetch_and_summarize_logic)
+    return {"status": "scraping started"}
 
 @app.post("/api/refresh")
-async def trigger_refresh():
-    await fetch_and_summarize_logic()
-    return {"status": "refresh completed"}
+async def trigger_refresh(background_tasks: BackgroundTasks):
+    background_tasks.add_task(fetch_and_summarize_logic)
+    return {"status": "refresh started"}
 
 @app.get("/api/health")
 def health_check():

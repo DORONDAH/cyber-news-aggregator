@@ -240,45 +240,6 @@ async def scrape_infosecurity():
         logger.error(f"Error scraping Infosecurity: {str(e)}")
         return []
 
-async def scrape_cyberscoop():
-    url = "https://cyberscoop.com/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    try:
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch CyberScoop: {response.status_code}")
-                return []
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = []
-            # Updated selector: post-item
-            for item in soup.find_all('article', class_='post-item')[:10]:
-                title_tag = item.find(['h2', 'h3'], class_='post-item__title')
-                if not title_tag: continue
-                link_tag = title_tag.find('a')
-                if not link_tag: continue
-
-                title = link_tag.text.strip()
-                link = link_tag['href']
-
-                summary_tag = item.find('div', class_='post-item__excerpt') or item.find('p')
-                summary = summary_tag.text.strip() if summary_tag else ""
-
-                articles.append({
-                    'title': title,
-                    'url': link,
-                    'content': summary,
-                    'source': 'CyberScoop',
-                    'published_at': datetime.now(timezone.utc)
-                })
-            return articles
-    except Exception as e:
-        logger.error(f"Error scraping CyberScoop: {str(e)}")
-        return []
-
 async def scrape_cisa():
     url = "https://www.cisa.gov/news-events/cybersecurity-advisories"
     headers = {

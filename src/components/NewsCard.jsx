@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ExternalLink, Clock, Copy, Check, Eye, EyeOff } from 'lucide-react';
 
-const NewsCard = ({ article, isRead, onToggleRead }) => {
+const NewsCard = ({ article, isRead, onToggleRead, isHyped = false }) => {
   const [copied, setCopied] = useState(false);
 
   const formatDate = (dateStr) => {
@@ -46,7 +46,16 @@ const NewsCard = ({ article, isRead, onToggleRead }) => {
   };
 
   return (
-    <div className={`bg-slate-800 rounded-lg p-6 shadow-lg border transition-all flex flex-col relative group ${isRead ? 'opacity-40 border-slate-700 grayscale-[0.5]' : 'border-slate-700 hover:border-blue-500'}`}>
+    <div className={`bg-slate-800 rounded-lg p-6 shadow-lg border transition-all flex flex-col relative group
+      ${isRead ? 'opacity-40 border-slate-700 grayscale-[0.5]' :
+        isHyped ? 'border-red-500/50 shadow-red-900/20 ring-1 ring-red-500/20' : 'border-slate-700 hover:border-blue-500'}`}>
+
+      {isHyped && (
+        <div className="absolute -top-3 right-4 bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded-full shadow-lg z-20 animate-pulse">
+          URGENT INTEL
+        </div>
+      )}
+
       <div className="flex justify-between items-start mb-2 gap-2">
         <div className="flex items-start gap-3">
           {getFavicon(article.url) && (
@@ -57,7 +66,7 @@ const NewsCard = ({ article, isRead, onToggleRead }) => {
               onError={(e) => e.target.style.display = 'none'}
             />
           )}
-          <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+          <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : isHyped ? 'text-red-400' : 'text-blue-400'}`}>{article.title}</h3>
         </div>
         <div className="flex gap-1 flex-shrink-0">
           <button
