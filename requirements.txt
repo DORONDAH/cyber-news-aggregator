@@ -8,5 +8,5 @@ openai
 python-dotenv
 pydantic
 sse-starlette
-google-generativeai
+google-genai
 feedparser

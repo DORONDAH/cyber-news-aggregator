@@ -7,7 +7,7 @@ venv/
 ENV/
 env/
 .env
-backend/cyber_news.db
+cyber_news.db
 
 # Node
 node_modules/

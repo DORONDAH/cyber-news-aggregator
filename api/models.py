@@ -1,15 +1,11 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import datetime
-
+from datetime import datetime, timezone
 import os
 
-# Use /tmp for SQLite on Vercel as it's the only writable directory
-if os.environ.get("VERCEL"):
-    DATABASE_URL = "sqlite:////tmp/cyber_news.db"
-else:
-    DATABASE_URL = "sqlite:///./cyber_news.db"
+# Local-first SQLite database
+DATABASE_URL = "sqlite:///./cyber_news.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -25,7 +21,16 @@ class Article(Base):
     summary = Column(Text)
     source = Column(String)
     category = Column(String, default="General")
+    severity = Column(String, default="Medium")
     published_at = Column(DateTime)
-    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-Base.metadata.create_all(bind=engine)
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

@@ -1,581 +1,279 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download, Zap, List, Grid } from 'lucide-react';
+import { Shield, RefreshCw, Trash2, History, LayoutDashboard, Radio, Search, Download, Zap, List, Grid, WifiOff, AlertTriangle, Info } from 'lucide-react';
 import NewsCard from './components/NewsCard';
 
+const API_BASE = ''; // Relative paths for local serving
+
 function App() {
+  // State
   const [news, setNews] = useState([]);
   const [history, setHistory] = useState([]);
-  const [view, setView] = useState('dashboard'); // 'dashboard' or 'history'
-  const [isConnected, setIsConnected] = useState(false);
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'history'
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'compact'
-  const [statusMessage, setStatusMessage] = useState('');
+  const [error, setError] = useState(null);
+  const [statusMessage, setStatusMessage] = useState('Initializing local intel feed...');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSource, setSelectedSource] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [readArticles, setReadArticles] = useState(() => {
-    const saved = localStorage.getItem('readArticles');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [hideRead, setHideRead] = useState(false);
-  const searchInputRef = useRef(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  const categories = ['All', 'Ransomware', 'Vulnerability', 'Data Breach', 'Malware', 'Policy/Legal', 'General'];
+  // Persistence (Safety wrapped)
+  const [readArticles, setReadArticles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('readArticles');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
+
+  const [bookmarkedArticles, setBookmarkedArticles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bookmarkedArticles');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
 
   useEffect(() => {
-    localStorage.setItem('readArticles', JSON.stringify(readArticles));
+    try {
+      localStorage.setItem('readArticles', JSON.stringify(readArticles));
+    } catch (e) {}
   }, [readArticles]);
 
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      // Don't trigger if user is typing in the search bar
-      if (document.activeElement.tagName === 'INPUT') return;
+    try {
+      localStorage.setItem('bookmarkedArticles', JSON.stringify(bookmarkedArticles));
+    } catch (e) {}
+  }, [bookmarkedArticles]);
 
-      if (e.key === 's') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === 'r') {
-        refreshNews();
+  // Initial Data Fetch
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/news`);
+      if (!res.ok) throw new Error('Failed to fetch news feed');
+      const data = await res.json();
+      setNews(Array.isArray(data) ? data : []);
+
+      const histRes = await fetch(`${API_BASE}/api/history`);
+      if (histRes.ok) {
+        const histData = await histRes.json();
+        setHistory(Array.isArray(histData) ? histData : []);
       }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
-
-  const exportToCSV = () => {
-    if (filteredItems.length === 0) return;
-
-    const headers = ['Title', 'Source', 'Category', 'URL', 'Summary', 'Published At'];
-    const rows = filteredItems.map(art => [
-      `"${art.title.replace(/"/g, '""')}"`,
-      `"${art.source}"`,
-      `"${art.category || 'General'}"`,
-      `"${art.url}"`,
-      `"${(art.summary || '').replace(/"/g, '""')}"`,
-      `"${art.published_at}"`
-    ]);
-
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `cyber_news_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const toggleRead = (articleUrl) => {
-    setReadArticles(prev =>
-      prev.includes(articleUrl)
-        ? prev.filter(url => url !== articleUrl)
-        : [...prev, articleUrl]
-    );
-  };
-
-  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
-    fetchNews();
+    fetchData();
 
+    // SSE Real-time Updates
     const eventSource = new EventSource(`${API_BASE}/api/stream`);
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-    };
-
     eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      try {
+        const data = JSON.parse(event.data);
 
-      if (data.status_update) {
-        setStatusMessage(data.status_update);
-        if (data.status_update === 'Done!') {
-          setLoading(false);
-          setTimeout(() => setStatusMessage(''), 3000);
-        } else {
-          setLoading(true);
+        if (data.status_update) {
+          setStatusMessage(data.status_update);
+          return;
         }
-      } else {
+
+        // It's a news article update
         setNews(prev => {
-          const index = prev.findIndex(art => art.url === data.url);
-          if (index !== -1) {
-            // Update existing article with new summary/category
-            const updated = [...prev];
-            updated[index] = { ...updated[index], ...data };
-            return updated;
-          }
-          // Add new article
-          return [data, ...prev].slice(0, 50);
-        });
-        setHistory(prev => {
-          const index = prev.findIndex(art => art.url === data.url);
+          const index = prev.findIndex(a => a.id === data.id);
           if (index !== -1) {
             const updated = [...prev];
             updated[index] = { ...updated[index], ...data };
             return updated;
           }
-          return prev;
+          return [data, ...prev];
         });
+      } catch (e) {
+        console.error("Error parsing SSE data", e);
       }
     };
 
-    eventSource.onerror = () => {
-      setIsConnected(false);
+    eventSource.onerror = (e) => {
+      console.warn("SSE Connection lost. Retrying...");
+      eventSource.close();
+      // Re-establish after 5s
+      setTimeout(() => {
+        if (view === 'dashboard') fetchData();
+      }, 5000);
     };
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       eventSource.close();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
-  const fetchNews = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/news`);
-      const data = await res.json();
-      setNews(data);
-
-      // SMART WARMUP: If database is empty (common on Vercel cold starts),
-      // trigger an automatic refresh so the user gets content immediately.
-      if (data.length === 0 && view === 'dashboard' && !loading) {
-        console.log("Feed empty, triggering auto-warmup...");
-        refreshNews();
-      }
-    } catch (err) {
-      console.error('Failed to fetch news', err);
-    } finally {
-      setLoading(false);
-    }
+  // Actions
+  const handleRefresh = async () => {
+    setStatusMessage('Manual sync requested...');
+    await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
   };
 
-  const fetchHistory = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/history`);
-      const data = await res.json();
-      setHistory(data);
-    } catch (err) {
-      console.error('Failed to fetch history', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleAISummarize = async () => {
+    setStatusMessage('Requesting AI Batch processing...');
+    await fetch(`${API_BASE}/api/summarize-batch`, { method: 'POST' });
   };
 
-  const clearHistory = async () => {
-    if (!confirm('Are you sure you want to clear all history?')) return;
-    try {
-      await fetch(`${API_BASE}/api/settings/clear`, { method: 'POST' });
-      setNews([]);
-      setHistory([]);
-    } catch (err) {
-      console.error('Failed to clear history', err);
-    }
+  const toggleRead = (url) => {
+    setReadArticles(prev => prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]);
   };
 
-  const refreshNews = async () => {
-    setLoading(true);
-    setStatusMessage('Requesting refresh...');
-    try {
-      await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
-    } catch (err) {
-      console.error('Failed to trigger refresh', err);
-      setStatusMessage('Refresh request failed');
-      setLoading(false);
-      setTimeout(() => setStatusMessage(''), 3000);
-    }
-  };
-
-  const summarizeMore = async () => {
-    const pending = (view === 'dashboard' ? news : history)
-      .filter(art => !art.summary)
-      .slice(0, 5);
-
-    if (pending.length === 0) return;
-
-    setLoading(true);
-    const total = pending.length;
-
-    for (let i = 0; i < total; i++) {
-      const article = pending[i];
-      setStatusMessage(`AI Summarizing ${i + 1}/${total}...`);
-
-      try {
-        const res = await fetch(`${API_BASE}/api/summarize-single`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: article.id })
-        });
-
-        if (res.ok) {
-          const updatedArt = await res.json();
-          // Update local state immediately
-          setNews(prev => prev.map(a => a.id === updatedArt.id ? { ...a, ...updatedArt } : a));
-          setHistory(prev => prev.map(a => a.id === updatedArt.id ? { ...a, ...updatedArt } : a));
-        }
-      } catch (err) {
-        console.error('Failed to summarize article', err);
-      }
-
-      // 12s delay between items to respect Gemini 5 RPM limit
-      if (i < total - 1) {
-        setStatusMessage(`AI Done. Cooldown: ${i + 1}/${total} (Waiting 12s...)`);
-        await new Promise(resolve => setTimeout(resolve, 12000));
-      }
-    }
-
-    setLoading(false);
-    setStatusMessage('Batch complete!');
-    setTimeout(() => setStatusMessage(''), 3000);
-  };
-
-  useEffect(() => {
-    if (view === 'history') {
-      fetchHistory();
-    }
-  }, [view]);
-
-  const filteredItems = useMemo(() => {
-    let items = view === 'dashboard' ? news : history;
-
-    // Filter by Source
-    if (selectedSource !== 'All') {
-      items = items.filter(item => item.source === selectedSource);
-    }
-
-    // Filter by Category
-    if (selectedCategory !== 'All') {
-      items = items.filter(item => item.category === selectedCategory);
-    }
-
-    // Filter by Read Status
-    if (hideRead) {
-      items = items.filter(item => !readArticles.includes(item.url));
-    }
-
-    if (!searchQuery.trim()) return items;
-
-    const query = searchQuery.toLowerCase();
-    return items.filter(item =>
-      item.title.toLowerCase().includes(query) ||
-      item.summary.toLowerCase().includes(query) ||
-      item.source.toLowerCase().includes(query) ||
-      (item.category && item.category.toLowerCase().includes(query))
-    );
-  }, [news, history, view, searchQuery, selectedSource, selectedCategory]);
-
-  const sources = useMemo(() => {
-    const allItems = [...news, ...history];
-    const uniqueSources = ['All', ...new Set(allItems.map(item => item.source))];
-    return uniqueSources;
-  }, [news, history]);
-
-  const hasPendingSummaries = useMemo(() => {
-    return (view === 'dashboard' ? news : history).some(art => !art.summary);
-  }, [news, history, view]);
-
-  // Logic to identify stories covered by multiple sources
-  const topStories = useMemo(() => {
-    if (view !== 'dashboard' || news.length === 0) return [];
-
-    const groups = [];
-    const processed = new Set();
-
-    // Simple word-overlap similarity check
-    const areSimilar = (t1, t2) => {
-      const words1 = new Set(t1.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3));
-      const words2 = new Set(t2.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3));
-      if (words1.size === 0 || words2.size === 0) return false;
-
-      let overlap = 0;
-      words1.forEach(w => { if (words2.has(w)) overlap++; });
-
-      const similarity = overlap / Math.min(words1.size, words2.size);
-      return similarity > 0.4; // 40% significant word overlap
-    };
-
-    news.forEach((art, i) => {
-      if (processed.has(i)) return;
-
-      const group = [art];
-      processed.add(i);
-
-      news.forEach((other, j) => {
-        if (processed.has(j)) return;
-        if (areSimilar(art.title, other.title)) {
-          group.push(other);
-          processed.add(j);
-        }
-      });
-
-      // It's a "Top Story" if covered by 2+ DIFFERENT sources
-      const sourcesInGroup = new Set(group.map(g => g.source));
-      if (sourcesInGroup.size >= 2) {
-        // Pick the most complete article (one with summary) to represent the group
-        const representative = group.find(g => g.summary) || group[0];
-        groups.push({
-          ...representative,
-          allSources: Array.from(sourcesInGroup),
-          groupCount: group.length
-        });
-      }
+  const toggleBookmark = (article) => {
+    setBookmarkedArticles(prev => {
+      const isBookmarked = prev.some(a => a.id === article.id);
+      if (isBookmarked) return prev.filter(a => a.id !== article.id);
+      return [...prev, article];
     });
+  };
 
-    return groups;
-  }, [news, view]);
+  // Filter Logic
+  const filteredNews = useMemo(() => {
+    let result = view === 'dashboard' ? news : history;
 
-  // Filter regular news to not duplicate what's in Top Stories (optional, but cleaner)
-  const finalFilteredItems = useMemo(() => {
-    const topStoryUrls = new Set(topStories.map(s => s.url));
-    return filteredItems.filter(item => !topStoryUrls.has(item.url));
-  }, [filteredItems, topStories]);
+    if (selectedCategory !== 'All') {
+      result = result.filter(a => a.category === selectedCategory);
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(a =>
+        a.title?.toLowerCase().includes(q) ||
+        a.summary?.toLowerCase().includes(q) ||
+        a.source?.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [news, history, view, selectedCategory, searchQuery]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-10 p-4">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Shield className="text-blue-500" size={32} />
-            <h1 className="text-2xl font-bold tracking-tight">CyberNews <span className="text-blue-500">Aggregator</span></h1>
+      <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
+              <Shield size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-white uppercase">CyberIntel <span className="text-blue-500">Local</span></h1>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
+                <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                {statusMessage}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {statusMessage && (
-              <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-blue-900/20 border border-blue-500/30 rounded-lg text-[10px] sm:text-xs text-blue-400 animate-pulse">
-                <RefreshCw size={12} className="animate-spin" />
-                <span className="max-w-[100px] sm:max-w-none truncate">{statusMessage}</span>
-              </div>
-            )}
-
-            <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${isConnected ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-              <Radio size={14} className={isConnected ? 'animate-pulse' : ''} />
-              {isConnected ? 'Live' : 'Disconnected'}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-grow md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Search intel..."
+                className="w-full bg-slate-800 border-slate-700 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-
-            <nav className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-              <button
-                onClick={() => setView('dashboard')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md transition-colors ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
-              >
-                <LayoutDashboard size={18} />
-                <span className="hidden sm:inline">Dashboard</span>
-              </button>
-              <button
-                onClick={() => setView('history')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md transition-colors ${view === 'history' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
-              >
-                <History size={18} />
-                <span className="hidden sm:inline">History</span>
-              </button>
-            </nav>
-
-            <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700 ml-2">
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-slate-700 text-blue-400' : 'text-slate-500 hover:bg-slate-800'}`}
-                title="Card View"
-              >
-                <Grid size={18} />
-              </button>
-              <button
-                onClick={() => setViewMode('compact')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'compact' ? 'bg-slate-700 text-blue-400' : 'text-slate-500 hover:bg-slate-800'}`}
-                title="Compact List View"
-              >
-                <List size={18} />
-              </button>
-            </div>
-
-            <button
-              onClick={refreshNews}
-              className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
-              title="Scrape All Sources (Shortcut: R)"
-            >
-              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <button onClick={handleRefresh} className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-400 hover:text-blue-400" title="Manual Refresh">
+              <RefreshCw size={20} />
             </button>
-
-            <button
-              onClick={exportToCSV}
-              className="p-2 text-slate-400 hover:text-green-400 hover:bg-green-900/20 rounded-lg transition-colors"
-              title="Export to CSV"
-            >
-              <Download size={20} />
-            </button>
-
-            {hasPendingSummaries && (
-              <button
-                onClick={summarizeMore}
-                disabled={loading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                AI Next 5
-              </button>
-            )}
-
-            <button
-              onClick={clearHistory}
-              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-              title="Clear All History"
-            >
-              <Trash2 size={20} />
+            <button onClick={handleAISummarize} className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-400 hover:text-amber-400" title="AI Process Next 5">
+              <Zap size={20} />
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow p-6 max-w-6xl mx-auto w-full">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              {view === 'dashboard' ? 'Latest Security Summaries' : '7-Day History'}
-              {loading && <RefreshCw size={18} className="animate-spin text-slate-500" />}
-            </h2>
-            {view === 'dashboard' && (
-              <span className="text-sm text-slate-500">
-                {filteredItems.length} items
-              </span>
-            )}
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
+        {/* Navigation & Filters */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button
+              onClick={() => setView('dashboard')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <LayoutDashboard size={16} /> Dashboard
+            </button>
+            <button
+              onClick={() => setView('history')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'history' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <History size={16} /> Archive
+            </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4">
-            <div className="relative flex-grow md:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search news..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-
-            <select
-              value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors text-slate-300"
-              title="Filter by Source"
-            >
-              {sources.map(source => (
-                <option key={source} value={source}>{source}</option>
-              ))}
-            </select>
-
+          <div className="flex items-center gap-2">
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors text-slate-300"
-              title="Filter by Category"
+              className="bg-slate-900 border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
             >
-              {categories.map(cat => (
+              <option value="All">All Categories</option>
+              {['Ransomware', 'Vulnerability', 'Data Breach', 'Malware', 'Policy/Legal', 'General'].map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
-
-            <label className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:border-slate-600 transition-colors">
-              <input
-                type="checkbox"
-                checked={hideRead}
-                onChange={(e) => setHideRead(e.target.checked)}
-                className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
-              />
-              <span className="text-sm text-slate-300 whitespace-nowrap">Hide Read</span>
-            </label>
           </div>
         </div>
 
-        {/* Hyped Cyber Attacks / Trending Section */}
-        {view === 'dashboard' && topStories.length > 0 && !searchQuery && selectedSource === 'All' && selectedCategory === 'All' && (
-          <div className="mb-12">
-            <div className="flex items-center gap-2 mb-6 text-red-500">
-              <div className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-bold animate-pulse uppercase tracking-tighter">Breaking</div>
-              <Zap size={20} fill="currentColor" className="animate-bounce" />
-              <h2 className="text-xl font-black tracking-tighter uppercase italic">Hyped Cyber Attacks</h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-red-900/30 border border-red-500/30 rounded-full ml-2 text-red-400">
-                HIGH SIGNAL / MULTI-SOURCE
-              </span>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {topStories.map((story) => (
-                <div key={story.id} className="relative group">
-                  {/* Aggressive Highlight Border Effect */}
-                  <div className="absolute -inset-1 bg-gradient-to-r from-red-600 via-orange-500 to-red-600 rounded-xl blur-md opacity-25 group-hover:opacity-60 transition duration-500 group-hover:duration-200 animate-gradient-x"></div>
-                  <div className="relative">
-                    <NewsCard
-                      article={story}
-                      isRead={readArticles.includes(story.url)}
-                      onToggleRead={toggleRead}
-                      isHyped={true}
-                      onFilterSource={setSelectedSource}
-                      onFilterCategory={setSelectedCategory}
-                    />
-                  </div>
-                  {/* Multi-source indicator badges */}
-                  <div className="absolute -top-3 -left-2 flex gap-1 z-10">
-                    {story.allSources.map(src => (
-                      <span key={src} className="text-[9px] font-bold bg-red-600 text-white px-2 py-0.5 rounded shadow-xl border border-red-400/50">
-                        {src}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-12 border-b border-slate-800/50"></div>
+        {/* Content States */}
+        {loading && news.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+            <RefreshCw size={48} className="animate-spin mb-4 text-blue-500/50" />
+            <p className="animate-pulse">Analyzing cyber landscape...</p>
           </div>
-        )}
-
-        {/* Regular News Grid */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <h2 className="text-lg font-bold text-slate-300 uppercase tracking-tighter">
-            {view === 'dashboard' ? "Today's Live Intel" : 'Historical Archive'}
-          </h2>
-        </div>
-
-        {loading && finalFilteredItems.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-64 bg-slate-800 rounded-lg border border-slate-700"></div>
-            ))}
+        ) : error && news.length === 0 ? (
+          <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-8 text-center">
+            <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
+            <h2 className="text-xl font-bold text-red-400 mb-2">Connection Error</h2>
+            <p className="text-slate-400 mb-6">{error}</p>
+            <button onClick={fetchData} className="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-lg transition-colors">Retry Connection</button>
+          </div>
+        ) : filteredNews.length === 0 ? (
+          <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-20 text-center">
+            <WifiOff size={48} className="mx-auto text-slate-700 mb-4" />
+            <h2 className="text-xl font-bold text-slate-400 mb-2">No Intelligence Found</h2>
+            <p className="text-slate-500">Try adjusting your filters or requesting a manual refresh.</p>
           </div>
         ) : (
-          <div className={viewMode === 'compact' ? "flex flex-col gap-2" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
-            {finalFilteredItems.map((article) => (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredNews.map(article => (
               <NewsCard
                 key={article.id}
                 article={article}
                 isRead={readArticles.includes(article.url)}
                 onToggleRead={toggleRead}
-                compact={viewMode === 'compact'}
-                onFilterSource={setSelectedSource}
-                onFilterCategory={setSelectedCategory}
+                isBookmarked={bookmarkedArticles.some(a => a.id === article.id)}
+                onToggleBookmark={toggleBookmark}
+                searchQuery={searchQuery}
               />
             ))}
-
-            {finalFilteredItems.length === 0 && !loading && (
-              <div className="col-span-full py-20 text-center">
-                <div className="text-slate-500 mb-2">
-                  {searchQuery ? `No results found for "${searchQuery}"` : 'No articles found.'}
-                </div>
-                <div className="text-sm text-slate-600">
-                  {searchQuery ? 'Try a different search term.' : 'The scraper runs daily. Trigger a manual refresh to see latest news.'}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 p-8 text-center text-slate-600 text-sm">
-        <p>© 2026 Cyber News Aggregator. Powered by FastAPI, React & AI.</p>
-      </footer>
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white text-center py-2 text-xs font-bold uppercase tracking-widest z-[100]">
+          Offline Mode - Displaying Cached Intelligence
+        </div>
+      )}
     </div>
   );
 }

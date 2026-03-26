@@ -1,9 +1,49 @@
 import React, { useState } from 'react';
-import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2, Shield } from 'lucide-react';
+import { ExternalLink, Clock, Copy, Check, Eye, EyeOff, Share2, Shield, ChevronDown, ChevronUp, FileText, Bookmark, Activity } from 'lucide-react';
 
-const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = false, onFilterSource, onFilterCategory }) => {
+const NewsCard = ({ article, isRead, onToggleRead, isBookmarked, onToggleBookmark, isNew = false, isHyped = false, compact = false, onFilterSource, onFilterCategory, searchQuery = '' }) => {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const highlightText = (text, query) => {
+    if (!text) return text;
+
+    // First, handle CVE detection and linking
+    const cveRegex = /(CVE-\d{4}-\d{4,7})/g;
+    const parts = text.split(cveRegex);
+
+    const formattedParts = parts.map((part, i) => {
+      if (cveRegex.test(part)) {
+        return (
+          <a
+            key={`cve-${i}`}
+            href={`https://nvd.nist.gov/vuln/detail/${part}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline hover:text-blue-300 decoration-blue-500/30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+
+      // Then, handle search highlighting on non-CVE parts
+      if (!query.trim()) return part;
+
+      const searchParts = part.split(new RegExp(`(${query})`, 'gi'));
+      return searchParts.map((sPart, j) =>
+        sPart.toLowerCase() === query.toLowerCase() ? (
+          <mark key={`mark-${i}-${j}`} className="bg-blue-500/40 text-white rounded px-0.5">{sPart}</mark>
+        ) : (
+          sPart
+        )
+      );
+    });
+
+    return <>{formattedParts}</>;
+  };
 
   const getSeverityColor = (sev) => {
     const colors = {
@@ -36,7 +76,10 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
   };
 
   const shareIntel = async () => {
-    const text = `🚨 CYBER INTEL BRIEF: ${article.title}\n\n${article.summary}\n\nSource: ${article.source}\nLink: ${article.url}`;
+    const severityPrefix = article.severity ? `[${article.severity.toUpperCase()} SEVERITY] ` : '';
+    const categorySuffix = article.category ? `\nCategory: #${article.category.replace(/\s+/g, '')}` : '';
+
+    const text = `🚨 CYBER INTEL BRIEF: ${severityPrefix}${article.title}\n\n${article.summary}\n\nSource: ${article.source}${categorySuffix}\nLink: ${article.url}\n\n🤖 Shared via CyberNews Aggregator`;
 
     if (navigator.share) {
       try {
@@ -72,14 +115,27 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
   const getFavicon = (url) => {
     try {
       const domain = new URL(url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      // Using DuckDuckGo's favicon service as it's often more reliable/higher quality than Google's s2
+      return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
     } catch (e) {
       return null;
     }
   };
 
+  const getSourceBadge = (source) => {
+    const authoritative = ['CISA', 'SANS ISC'];
+    const investigative = ['KrebsOnSecurity', 'The Record'];
+    const vendor = ['Unit 42', 'Mandiant', 'ZeroFox'];
+
+    if (authoritative.includes(source)) return { label: 'Authoritative', color: 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30' };
+    if (investigative.includes(source)) return { label: 'Investigative', color: 'text-amber-400 bg-amber-950/40 border-amber-500/30' };
+    if (vendor.includes(source)) return { label: 'Threat Intel', color: 'text-blue-400 bg-blue-950/40 border-blue-500/30' };
+    return null;
+  };
+
   if (compact) {
     return (
+      <>
       <div className={`bg-slate-800/50 rounded-md p-3 border border-slate-700 hover:border-blue-500 transition-all flex items-center gap-4 group ${isRead ? 'opacity-40' : ''}`}>
         <div className="flex-shrink-0 w-6 flex justify-center">
           {article.severity && (
@@ -102,7 +158,14 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
             >
               {article.category || 'General'}
             </button>
-            <h3 className={`text-sm font-bold truncate ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>{article.title}</h3>
+            <h3 className={`text-sm font-bold truncate ${isRead ? 'text-slate-400' : 'text-blue-400'}`}>
+              {highlightText(article.title, searchQuery)}
+            </h3>
+            {getSourceBadge(article.source) && (
+              <span className={`text-[8px] px-1 rounded border ml-2 ${getSourceBadge(article.source).color}`}>
+                {getSourceBadge(article.source).label}
+              </span>
+            )}
           </div>
         </div>
 
@@ -117,11 +180,28 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
         </div>
 
         <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onToggleBookmark(article)}
+            className={`p-1.5 transition-colors ${isBookmarked ? 'text-amber-400' : 'text-slate-400 hover:text-amber-400'}`}
+            title={isBookmarked ? "Remove Bookmark" : "Bookmark Intel"}
+          >
+            <Bookmark size={14} fill={isBookmarked ? "currentColor" : "none"} />
+          </button>
           <button onClick={() => onToggleRead(article.url)} className="p-1.5 text-slate-400 hover:text-blue-400" title="Mark Read"><Eye size={14} /></button>
+          <button onClick={() => setIsExpanded(!isExpanded)} className={`p-1.5 transition-colors ${isExpanded ? 'text-blue-400' : 'text-slate-400 hover:text-blue-400'}`} title="View Full Content"><FileText size={14} /></button>
           <button onClick={shareIntel} className="p-1.5 text-slate-400 hover:text-blue-400" title="Share"><Share2 size={14} /></button>
           <a href={article.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-400" title="Source"><ExternalLink size={14} /></a>
         </div>
       </div>
+      {isExpanded && (
+        <div className="px-3 pb-3 pt-0 text-[11px] text-slate-400 border-t border-slate-700/30 mt-2 bg-slate-900/30 rounded-b-md animate-fade-in">
+          <div className="font-bold mb-1 flex items-center gap-1 text-slate-500 uppercase tracking-tighter">
+            <Activity size={10} /> Full Scraped Content
+          </div>
+          <p className="line-clamp-6 italic">{article.content || 'No detailed content available.'}</p>
+        </div>
+      )}
+      </>
     );
   }
 
@@ -136,6 +216,12 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
         </div>
       )}
 
+      {isNew && !isHyped && (
+        <div className="absolute -top-3 right-4 bg-blue-600 text-white text-[9px] font-black px-2 py-1 rounded-full shadow-lg z-20">
+          NEW ARRIVAL
+        </div>
+      )}
+
       <div className="flex justify-between items-start mb-2 gap-2">
         <div className="flex items-start gap-3">
           {getFavicon(article.url) && (
@@ -146,9 +232,18 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
               onError={(e) => e.target.style.display = 'none'}
             />
           )}
-          <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : isHyped ? 'text-red-400' : 'text-blue-400'}`}>{article.title}</h3>
+          <h3 className={`text-xl font-bold leading-tight ${isRead ? 'text-slate-400' : isHyped ? 'text-red-400' : 'text-blue-400'}`}>
+            {highlightText(article.title, searchQuery)}
+          </h3>
         </div>
         <div className="flex gap-1 flex-shrink-0">
+          <button
+            onClick={() => onToggleBookmark(article)}
+            className={`p-2 transition-all rounded-md ${isBookmarked ? 'bg-amber-900/40 text-amber-400' : 'text-slate-500 hover:text-amber-400 hover:bg-amber-900/20'}`}
+            title={isBookmarked ? "Remove Bookmark" : "Bookmark Intel"}
+          >
+            <Bookmark size={16} fill={isBookmarked ? "currentColor" : "none"} />
+          </button>
           <button
             onClick={() => onToggleRead(article.url)}
             className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-md transition-all"
@@ -162,6 +257,13 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
             title="Copy Summary"
           >
             {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+          </button>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={`p-2 transition-all rounded-md ${isExpanded ? 'bg-blue-900/40 text-blue-400' : 'text-slate-500 hover:text-blue-400 hover:bg-blue-900/20'}`}
+            title="View Full Content"
+          >
+            <FileText size={16} />
           </button>
           <button
             onClick={shareIntel}
@@ -189,13 +291,24 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
 
       <div className="text-slate-300 mb-6 whitespace-pre-line text-sm flex-grow">
         {article.summary ? (
-          article.summary
+          highlightText(article.summary, searchQuery)
         ) : (
           <div className="space-y-2 animate-pulse">
             <div className="h-4 bg-slate-700/50 rounded w-3/4"></div>
             <div className="h-4 bg-slate-700/50 rounded w-5/6"></div>
             <div className="h-4 bg-slate-700/50 rounded w-2/3"></div>
             <p className="text-slate-500 italic mt-4 text-xs">Waiting for AI summary... Click "AI Next 5" to process.</p>
+          </div>
+        )}
+
+        {isExpanded && article.content && (
+          <div className="mt-4 p-4 bg-slate-900/50 border border-slate-700/30 rounded-lg text-xs text-slate-400 animate-fade-in">
+            <div className="font-bold mb-2 flex items-center gap-1 text-slate-500 uppercase tracking-tighter">
+              <Activity size={12} /> Technical Raw Intelligence
+            </div>
+            <p className="italic leading-relaxed">
+              {highlightText(article.content, searchQuery)}
+            </p>
           </div>
         )}
       </div>
@@ -212,6 +325,11 @@ const NewsCard = ({ article, isRead, onToggleRead, isHyped = false, compact = fa
             <Clock size={12} />
             <span>{formatDate(article.published_at)}</span>
           </div>
+          {getSourceBadge(article.source) && (
+            <span className={`text-[9px] px-2 py-0.5 rounded border mt-2 self-start font-bold uppercase tracking-tighter ${getSourceBadge(article.source).color}`}>
+              {getSourceBadge(article.source).label}
+            </span>
+          )}
         </div>
         <a
           href={article.url}

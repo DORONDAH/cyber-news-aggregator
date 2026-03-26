@@ -15,7 +15,10 @@ def parse_rss_date(struct_time):
 
 async def scrape_rss(url, source_name, limit=10):
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
             response = await client.get(url)
             if response.status_code != 200:
                 logger.error(f"Failed to fetch RSS for {source_name}: {response.status_code}")
@@ -71,6 +74,13 @@ async def scrape_zerofox():
 async def scrape_infosecurity():
     return await scrape_rss("https://www.infosecurity-magazine.com/rss/news/", "Infosecurity Mag")
 
+async def scrape_cybersecuritynews():
+    return await scrape_rss("https://cybersecuritynews.com/feed/", "Cyber Security News")
+
+async def scrape_infosecnews():
+    # Attempting common paths for infosecnews.org
+    return await scrape_rss("https://infosecnews.org/feed/", "InfoSec News")
+
 async def scrape_cisa():
     # CISA RSS for cybersecurity advisories
     return await scrape_rss("https://www.cisa.gov/cybersecurity-advisories.xml", "CISA")
@@ -80,3 +90,16 @@ async def scrape_cybernews():
 
 async def scrape_therecord():
     return await scrape_rss("https://therecord.media/feed/", "The Record")
+
+async def scrape_sans_isc():
+    return await scrape_rss("https://isc.sans.edu/rssfeed.xml", "SANS ISC")
+
+async def scrape_krebs():
+    # Krebs on Security RSS
+    return await scrape_rss("https://krebsonsecurity.com/feed/", "KrebsOnSecurity")
+
+async def scrape_talos():
+    return await scrape_rss("https://blog.talosintelligence.com/feeds/posts/default", "Cisco Talos")
+
+async def scrape_crowdstrike():
+    return await scrape_rss("https://www.crowdstrike.com/blog/feed/", "CrowdStrike")

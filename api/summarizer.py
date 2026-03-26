@@ -1,37 +1,19 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
+import logging
 
+# Load environment variables
 load_dotenv()
 
-async def summarize_article(content: str):
-    if not content:
-        return "No content available for summarization."
+# Logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    # Use GEMINI_API_KEY for free-tier reliability
-    key = os.getenv("GEMINI_API_KEY")
-
-    if not key or key == "your_gemini_api_key_here":
-        print(f"DEBUG: GEMINI_API_KEY is missing. (Found: {key})")
-        return f"• Summarizer: GEMINI_API_KEY not found in Vercel.\n• Please check your Vercel Environment Variables.\n• Make sure the name is exactly GEMINI_API_KEY."
-
-    try:
-        print(f"DEBUG: Initializing Gemini with key starting with: {key[:5]}...")
-        genai.configure(api_key=key)
-
-        # Use gemini-2.5-flash as requested for maximum compatibility with newer API keys
-        # We also add safety_settings to ensure cybersecurity news isn't blocked
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ]
-        )
-
-        prompt = f"""You are a cybersecurity expert. Analyze the following news article:
+# Constants
+MODEL_ID = 'gemini-2.0-flash'
+SUMMARY_PROMPT = """You are a cybersecurity expert. Analyze the following news article:
 {content}
 
 Tasks:
@@ -57,25 +39,38 @@ SUMMARY:
 • [Point 2]
 • [Point 3]"""
 
-        print(f"DEBUG: Calling Gemini API for summary and category...")
-        response = model.generate_content(prompt)
+async def summarize_article(content: str) -> str:
+    """Summarizes a cybersecurity news article using Gemini 2.0 Flash."""
+    if not content:
+        return "No content available for summarization."
 
-        # Handle the case where the response might be blocked or empty
-        if not response:
-            return "Summary not available. (No response from AI)"
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("GEMINI_API_KEY not found in environment.")
+        return "AI Summarization unavailable. Please check your GEMINI_API_KEY."
 
-        try:
-            if response.text:
-                print("DEBUG: Gemini response received successfully.")
-                return response.text
-        except ValueError:
-            # This happens if the response was blocked by safety filters
-            # even after we set them to BLOCK_NONE
-            return "Summary blocked by Gemini safety filters. Please check the content for sensitive terms."
+    try:
+        client = genai.Client(api_key=api_key)
+        prompt = SUMMARY_PROMPT.format(content=content)
 
-        return "Summary not available. (Empty response from AI)"
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                safety_settings=[
+                    types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+                    types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+                    types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+                    types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+                ]
+            )
+        )
+
+        if not response or not response.text:
+            return "Summary unavailable from AI."
+
+        return response.text
 
     except Exception as e:
-        error_message = str(e)
-        print(f"CRITICAL ERROR in Gemini summarization: {error_message}")
-        return f"Summary not available via Gemini. (Error: {error_message})"
+        logger.error(f"Gemini Summarization Error: {e}")
+        return f"Summarization failed. Error: {str(e)}"
